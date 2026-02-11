@@ -1,0 +1,8 @@
+# Datasets
+dataset/
+
+# Models
+models/
+
+# QA Results
+QA-result/
