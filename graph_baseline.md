@@ -36,7 +36,7 @@ LightRAG
 ```bash
 # 启动VLLM服务（建议在独立终端运行）
 python -m vllm.entrypoints.openai.api_server \
-    --model Qwen/Qwen2.5-32B-Instruct \
+    --model /workspace/models/Qwen3-32B \
     --served-model-name qwen3-32b \
     --host 0.0.0.0 \
     --port 8000 \
@@ -115,31 +115,66 @@ llm:
 
 | 配置项 | 方法 | 调整前 | 调整后 | 说明 |
 |--------|------|--------|--------|------|
-| **嵌入模型** | DyG-RAG | `openai_embedding` (默认) | `BAAI/bge-large-en-v1.5` | 使用HF模型 |
-| | GraphRAG-master | `YOURMODEL` (需配置) | `BAAI/bge-large-en-v1.5` | 统一HF模型 |
-| **API类型** | DyG-RAG | OpenAI | HuggingFace | 本地加载 |
+| **嵌入模型** | DyG-RAG | `openai_embedding` (默认) | `Qwen3-Embedding-8B` | 使用本地模型 |
+| | GraphRAG-master | `BAAI/bge-large-en-v1.5` | `Qwen3-Embedding-8B` | 统一本地模型 |
+| **模型路径** | 所有方法 | HuggingFace Hub 下载 | `/workspace/models/Qwen3-Embedding-8B` | 本地路径 |
+| **API类型** | DyG-RAG | OpenAI | SentenceTransformer | 本地加载 |
 | | GraphRAG-master | `hf` | `hf` | 保持不变 |
-| **嵌入维度** | DyG-RAG | 自动检测 | `1024` | BGE模型维度 |
-| | GraphRAG-master | `1024` | `1024` | 保持不变 |
+| **嵌入维度** | DyG-RAG | 自动检测 | `4096` | Qwen模型维度 |
+| | GraphRAG-master | `1024` | `4096` | 统一为4096 |
+| **最大上下文** | DyG-RAG | `8192` | `32768` | Qwen支持32k |
+| | GraphRAG-master | `8192` | `32768` | 统一为32k |
 | **批处理大小** | DyG-RAG | `32` | `128` | 提高效率 |
 | | GraphRAG-master | `128` | `128` | 保持不变 |
 | **最大并发** | DyG-RAG | `32` | `32` | 保持不变 |
 | | GraphRAG-master | `16` | `16` | 保持不变 |
 
+**统一使用**: **Qwen3-Embedding-8B** 本地部署（通过 SentenceTransformer）
+
 #### DyG-RAG调整
 ```python
 from sentence_transformers import SentenceTransformer
 
-# 使用统一的嵌入模型
-def unified_embedding(texts):
-    model = SentenceTransformer("BAAI/bge-large-en-v1.5")  # 统一的嵌入模型
-    embeddings = model.encode(texts)
-    return embeddings
+# 使用统一的 Qwen-Embedding-8B 模型
+QWEN_EMBEDDING_PATH = "/workspace/models/Qwen3-Embedding-8B"
+
+def get_qwen_embedding():
+    model = SentenceTransformer(
+        QWEN_EMBEDDING_PATH,
+        trust_remote_code=True
+    )
+    return model
+
+# 在 GraphRAG 中使用（方式1：使用内置函数）
+from graphrag import GraphRAG
+from graphrag._llm import qwen_embedding_8b
 
 graph_func = GraphRAG(
     working_dir=str(WORK_DIR),
-    embedding_func=unified_embedding,
-    embedding_batch_num=128,  # 统一批处理大小
+    embedding_func=qwen_embedding_8b,  # 使用 Qwen-Embedding-8B
+    embedding_batch_num=128,
+)
+
+# 方式2：自定义 EmbeddingFunc（如示例脚本）
+from dataclasses import dataclass
+
+@dataclass
+class EmbeddingFunc:
+    model: SentenceTransformer
+
+    def __post_init__(self):
+        self.embedding_dim = 4096
+        self.max_token_size = 32768
+
+    async def __call__(self, texts: list[str]) -> np.ndarray:
+        return self.model.encode(texts, batch_size=32)
+
+embedding_func = EmbeddingFunc(model=get_qwen_embedding())
+
+graph_func = GraphRAG(
+    working_dir=str(WORK_DIR),
+    embedding_func=embedding_func,
+    embedding_batch_num=128,
 )
 ```
 
@@ -148,10 +183,17 @@ graph_func = GraphRAG(
 ```yaml
 embedding:
   api_type: "hf"
-  model: "BAAI/bge-large-en-v1.5"  # 统一的嵌入模型
-  dimensions: 1024  # 根据模型维度统一
+  model: "/workspace/models/Qwen3-Embedding-8B"  # 本地 Qwen-Embedding-8B 模型
+  dimensions: 4096  # Qwen-Embedding-8B 输出维度
   embed_batch_size: 128  # 统一批处理大小
+  cache_folder: ""  # 本地模型无需缓存
 ```
+
+**注意事项**:
+1. **维度变化**: 从 1024 (BGE) 升级到 4096 (Qwen)，向量数据库大小会增加约4倍
+2. **性能影响**: Qwen-Embedding-8B 是8B参数模型，推理速度可能比 BGE-large (335M) 慢，建议使用 GPU 加速
+3. **兼容性**: 需要 transformers>=4.51.0 和 sentence-transformers>=2.7.0
+4. **Trust Remote Code**: Qwen 模型需要设置 `trust_remote_code=True` 才能加载
 
 ---
 

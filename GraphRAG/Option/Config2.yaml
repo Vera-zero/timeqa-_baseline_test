@@ -1,19 +1,22 @@
 llm:
-  api_type: "open_llm" # or openai
-  base_url: 'YOUR_BASE_URL'
-  model: "YOUR_MODEL"
-  api_key: "YOUR_API_KEY"
+  api_type: "open_llm"  # OpenAI-compatible local LLM (VLLM)
+  base_url: 'http://localhost:8000/v1'  # Local VLLM service URL
+  model: "qwen3-32b"  # Model name (must match VLLM --served-model-name)
+  api_key: "EMPTY"  # Local VLLM doesn't require real API key
+  temperature: 0.0  # Deterministic output for reproducibility
+  max_token: 32768  # Maximum token limit for Qwen3-32B
+  timeout: 600  # Timeout in seconds
 
 embedding:
-  api_type: "hf"  # or  ollama / openai.
+  api_type: "hf"  # HuggingFace / SentenceTransformer
   # base_url: "https://cfcus02.opapi.win/v1"  # or forward url / other llm url
-  api_key: "YOUR_API_KEY"
-  model: "YOURMODEL"
+  api_key: "EMPTY"  # Not required for local models
+  model: "/workspace/models/Qwen3-Embedding-8B"  # Local Qwen3-Embedding-8B model path
   cache_dir: ""
-  dimensions: 1024
-  max_token_size: 8102
-  embed_batch_size: 128
-  embedding_func_max_async: 16
+  dimensions: 4096  # Qwen3-Embedding-8B output dimension
+  max_token_size: 32768  # Qwen3-Embedding-8B supports 32k context
+  embed_batch_size: 128  # Batch size for embedding generation
+  embedding_func_max_async: 16  # Maximum async embedding requests
  
 data_root:  "YOUR_ROOT_DATA" # Root directory for data
 

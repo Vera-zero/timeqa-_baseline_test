@@ -70,14 +70,15 @@ class RAGEmbeddingFactory(GenericFactory):
         return OllamaEmbedding(**params)
 
     def _create_hf(self, config) -> HuggingFaceEmbedding:
-        
+
         # For huggingface-hub embedding model, we only need to set the model_name
         params = dict(
             model_name=config.embedding.model,
             cache_folder=config.embedding.cache_folder,
             device = "cuda",
-            target_devices = ["cuda:7"],
-            embed_batch_size = 128,
+            target_devices = ["cuda:0"],
+            embed_batch_size = config.embedding.embed_batch_size or 128,
+            trust_remote_code=True,
         )
         if config.embedding.cache_folder == "":
             del params["cache_folder"]
@@ -94,7 +95,8 @@ class RAGEmbeddingFactory(GenericFactory):
             params["embed_batch_size"] = config.embedding.embed_batch_size
 
         if config.embedding.dimensions:
-             params["dimensions"] = config.embedding.dimensions
+            params["dimensions"] = config.embedding.dimensions
+
     def _raise_for_key(self, key: Any):
         raise ValueError(f"The embedding type is currently not supported: `{type(key)}`, {key}")
 

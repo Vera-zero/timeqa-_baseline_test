@@ -218,6 +218,38 @@ async def openai_embedding(texts: list[str]) -> np.ndarray:
     return np.array([dp.embedding for dp in response.data])
 
 
+# Qwen-Embedding-8B 本地嵌入函数
+@wrap_embedding_func_with_attrs(
+    embedding_dim=4096,  # Qwen-Embedding-8B 的默认维度
+    max_token_size=32768  # Qwen-Embedding-8B 支持 32k 上下文
+)
+async def qwen_embedding_8b(texts: list[str]) -> np.ndarray:
+    """使用本地 Qwen-Embedding-8B 模型进行文本嵌入"""
+    from sentence_transformers import SentenceTransformer
+    import os
+
+    # 本地模型路径
+    model_path = "/workspace/models/Qwen3-Embedding-8B"
+
+    # 加载模型（使用全局单例避免重复加载）
+    if not hasattr(qwen_embedding_8b, '_model'):
+        qwen_embedding_8b._model = SentenceTransformer(
+            model_path,
+            device="cuda" if os.environ.get("CUDA_VISIBLE_DEVICES") else "cpu",
+            trust_remote_code=True
+        )
+
+    # 批量嵌入
+    embeddings = qwen_embedding_8b._model.encode(
+        texts,
+        batch_size=32,
+        show_progress_bar=False,
+        normalize_embeddings=True  # 建议归一化以提升相似度计算
+    )
+
+    return embeddings
+
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=4, max=10),
@@ -292,3 +324,112 @@ async def azure_openai_embedding(texts: list[str]) -> np.ndarray:
         model="text-embedding-3-small", input=texts, encoding_format="float"
     )
     return np.array([dp.embedding for dp in response.data])
+
+
+# ============================================================================
+# Local Qwen3-32B Model Functions (using VLLM)
+# ============================================================================
+# To use these functions, first start the VLLM service:
+# python -m vllm.entrypoints.openai.api_server \
+#     --model /workspace/models/Qwen3-32B \
+#     --served-model-name qwen3-32b \
+#     --host 0.0.0.0 \
+#     --port 8000 \
+#     --tensor-parallel-size 2 \
+#     --max-model-len 32768
+# ============================================================================
+
+global_qwen3_32b_async_client = None
+
+
+def get_qwen3_32b_async_client_instance():
+    """Get or create the global Qwen3-32B AsyncOpenAI client instance."""
+    global global_qwen3_32b_async_client
+    if global_qwen3_32b_async_client is None:
+        global_qwen3_32b_async_client = AsyncOpenAI(
+            base_url="http://localhost:8000/v1",
+            api_key="EMPTY"  # Local VLLM doesn't require API key
+        )
+    return global_qwen3_32b_async_client
+
+
+@retry(
+    stop=stop_after_attempt(5),
+    wait=wait_exponential(multiplier=1, min=4, max=10),
+    retry=retry_if_exception_type((RateLimitError, APIConnectionError)),
+)
+async def qwen3_32b_complete_if_cache(
+    prompt, system_prompt=None, history_messages=[], **kwargs
+) -> str:
+    """
+    Complete text using local Qwen3-32B model via VLLM service.
+
+    Args:
+        prompt: The user prompt
+        system_prompt: Optional system prompt
+        history_messages: List of previous messages in the conversation
+        **kwargs: Additional parameters, including:
+            - hashing_kv: BaseKVStorage for caching
+            - temperature: Sampling temperature (default: 0.0)
+            - max_tokens: Maximum tokens to generate (default: 4096)
+
+    Returns:
+        Generated text response
+    """
+    qwen_client = get_qwen3_32b_async_client_instance()
+    hashing_kv: BaseKVStorage = kwargs.pop("hashing_kv", None)
+
+    # Build messages
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.extend(history_messages)
+    messages.append({"role": "user", "content": prompt})
+
+    # Check cache
+    if hashing_kv is not None:
+        args_hash = compute_args_hash("qwen3-32b", messages)
+        if_cache_return = await hashing_kv.get_by_id(args_hash)
+        if if_cache_return is not None:
+            return if_cache_return["return"]
+
+    # Call VLLM service
+    response = await qwen_client.chat.completions.create(
+        model="qwen3-32b",
+        messages=messages,
+        temperature=kwargs.get("temperature", 0.0),  # Default to 0.0 for deterministic output
+        max_tokens=kwargs.get("max_tokens", 4096),
+    )
+
+    # Cache result
+    if hashing_kv is not None:
+        await hashing_kv.upsert(
+            {args_hash: {"return": response.choices[0].message.content, "model": "qwen3-32b"}}
+        )
+        await hashing_kv.index_done_callback()
+
+    return response.choices[0].message.content
+
+
+async def qwen3_32b_complete(
+    prompt, system_prompt=None, history_messages=[], **kwargs
+) -> str:
+    """
+    Convenience function for Qwen3-32B completion.
+    This is the primary function to use for local Qwen3-32B inference.
+
+    Args:
+        prompt: The user prompt
+        system_prompt: Optional system prompt
+        history_messages: List of previous messages
+        **kwargs: Additional parameters (temperature, max_tokens, hashing_kv, etc.)
+
+    Returns:
+        Generated text response
+    """
+    return await qwen3_32b_complete_if_cache(
+        prompt,
+        system_prompt=system_prompt,
+        history_messages=history_messages,
+        **kwargs,
+    )

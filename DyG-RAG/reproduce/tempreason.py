@@ -42,19 +42,32 @@ logging.basicConfig(level=logging.INFO)
 logging.getLogger("DyG-RAG").setLevel(logging.INFO)
 
 ################################################################################
-# 0. Configuration
+# VLLM Service Configuration
+# Before running this script, start the VLLM service in a separate terminal:
+#
+# python -m vllm.entrypoints.openai.api_server \
+#     --model /workspace/models/Qwen3-32B \
+#     --served-model-name qwen3-32b \
+#     --host 0.0.0.0 \
+#     --port 8000 \
+#     --tensor-parallel-size 2 \
+#     --max-model-len 32768
+#
+# Then verify the service is running:
+# curl http://localhost:8000/v1/models
 ################################################################################
+
 def get_config_value(env_name: str, description: str, example: str = None) -> str:
     """Get configuration value from environment variable or user input."""
     value = os.getenv(env_name)
     if value:
         return value
-    
+
     print(f"\n⚠️  Missing configuration: {env_name}")
     print(f"Description: {description}")
     if example:
         print(f"Example: {example}")
-    
+
     while True:
         user_input = input(f"Please enter {env_name}: ").strip()
         if user_input:
@@ -63,21 +76,21 @@ def get_config_value(env_name: str, description: str, example: str = None) -> st
 
 print("🔧 Checking configuration...")
 VLLM_BASE_URL = get_config_value(
-    "VLLM_BASE_URL", 
-    "Base URL for VLLM API service", 
-    "http://127.0.0.1:8000/v1"
+    "VLLM_BASE_URL",
+    "Base URL for VLLM API service",
+    "http://localhost:8000/v1"
 )
 
 BEST_MODEL_NAME = get_config_value(
-    "QWEN_BEST", 
-    "Model name for the best/primary LLM", 
-    "qwen-14b"
+    "QWEN_BEST",
+    "Model name for the best/primary LLM (must match --served-model-name)",
+    "qwen3-32b"
 )
 
-LOCAL_BGE_PATH = get_config_value(
-    "LOCAL_BGE_PATH", 
-    "Local path to BGE embedding model", 
-    "/path/to/bge-m3"
+LOCAL_QWEN_EMBEDDING_PATH = get_config_value(
+    "LOCAL_QWEN_EMBEDDING_PATH",
+    "Local path to Qwen3-Embedding-8B model",
+    "/workspace/models/Qwen3-Embedding-8B"
 )
 
 OPENAI_API_KEY_FAKE = "EMPTY"
@@ -117,7 +130,7 @@ class EmbeddingFunc:
     def __setstate__(self, state):
         self.__dict__.update(state)
 
-def get_bge_embedding_func() -> EmbeddingFunc:
+def get_qwen_embedding_func() -> EmbeddingFunc:
     gpu_count = torch.cuda.device_count()
     using_cuda = gpu_count > 0
     device = "cuda" if using_cuda else "cpu"
@@ -127,15 +140,15 @@ def get_bge_embedding_func() -> EmbeddingFunc:
         model_kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
 
     st_model = SentenceTransformer(
-        LOCAL_BGE_PATH,
-        device=device,              
+        LOCAL_QWEN_EMBEDDING_PATH,
+        device=device,
         trust_remote_code=True,
         model_kwargs=model_kwargs,
     )
 
     return EmbeddingFunc(
         embedding_dim=st_model.get_sentence_embedding_dimension(),
-        max_token_size=8192,       
+        max_token_size=32768,
         model=st_model,
     )
     
@@ -192,7 +205,7 @@ async def best_model_func(prompt: str, system_prompt: str | None = None, history
 ################################################################################
 # 2. DyG-RAG initialization
 ################################################################################
-embedding_func = get_bge_embedding_func()
+embedding_func = get_qwen_embedding_func()
 model_ref = embedding_func.model
 embedding_func.model = None 
 

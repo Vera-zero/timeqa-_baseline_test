@@ -30,6 +30,7 @@ from ._llm import (
     gpt_4o_complete,
     gpt_4o_mini_complete,
     openai_embedding,
+    qwen_embedding_8b,
     azure_gpt_4o_complete,
     azure_openai_embedding,
     azure_gpt_4o_mini_complete,
@@ -155,7 +156,7 @@ class GraphRAG:
 
 
     # text embedding
-    embedding_func: EmbeddingFunc = field(default_factory=lambda: openai_embedding)
+    embedding_func: EmbeddingFunc = field(default_factory=lambda: qwen_embedding_8b)
     embedding_batch_num: int = 32
     embedding_func_max_async: int = 32
     query_better_than_threshold: float = 0.2
@@ -202,7 +203,7 @@ class GraphRAG:
         # These are runtime objects, not config, so we exclude them.
         keys_to_exclude = [
             "event_dynamic_graph",
-            "events_vdb"
+            "events_vdb",
             "full_docs",
             "text_chunks",
             "llm_response_cache"

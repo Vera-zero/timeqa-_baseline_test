@@ -1,0 +1,100 @@
+# 核心深度学习框架
+torch>=2.0.0
+transformers>=4.35.0
+accelerate>=0.24.0
+tokenizers>=0.15.0
+sentence-transformers>=2.2.0
+
+# 数据处理
+numpy>=1.24.0
+pandas>=2.0.0
+datasets>=2.14.0
+
+# 机器学习与科学计算
+scikit-learn>=1.3.0
+scipy
+
+# 图计算与向量数据库
+networkx
+igraph==0.11.8
+neo4j==5.28.1
+graspologic==3.4.1
+
+# 向量存储与检索
+faiss-gpu==1.7.2
+hnswlib==0.8.0
+nano-vectordb==0.0.4.3
+
+# LlamaIndex 生态
+llama-index==0.12.28
+llama-index-embeddings-huggingface==0.5.2
+llama-index-embeddings-ollama==0.6.0
+llama-index-legacy==0.9.48.post4
+llama-index-vector-stores-faiss==0.3.0
+llama-index-vector-stores-postgres==0.4.2
+
+# ColBERT
+colbert-ai==0.2.21
+
+# LLM API 客户端
+anthropic==0.49.0
+openai
+
+# vLLM 推理引擎
+vllm==0.8.4
+
+# Web 框架与 API
+fastapi>=0.100.0
+fastapi-cli==0.0.7
+uvicorn>=0.23.0
+python-multipart==0.0.20
+httptools==0.6.4
+websockets==15.0.1
+uvloop==0.21.0
+
+# 数据验证
+pydantic>=2.0.0
+email-validator==2.2.0
+
+# AWS 支持
+boto3==1.37.1
+aioboto3==14.1.0
+
+# 工具库
+tqdm>=4.65.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+loguru==0.7.3
+pyyaml
+
+# 文本处理与评估
+rouge-score==0.1.2
+mauve-text==0.4.0
+tiktoken
+
+# 可视化
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# 图算法
+pcst-fast==1.0.10
+umap-learn>=0.5.6,<0.6.0
+
+# CUDA 支持 (如果使用 NVIDIA GPU)
+cupy-cuda12x==13.4.1
+
+# 其他工具
+future==1.0.0
+lazy-object-proxy==1.10.0
+tomli==2.0.1
+pyfiglet==1.0.2
+hf-xet==1.0.4
+
+# 依赖管理工具
+pip-chill==1.0.3
+pipdeptree==2.26.1
+pipmaster==0.5.4
+jaraco.collections==5.1.0
+
+# 异步 HTTP 客户端
+aiohttp
