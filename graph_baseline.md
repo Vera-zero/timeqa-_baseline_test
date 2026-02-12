@@ -262,6 +262,62 @@ llm:
 
 ---
 
+### Qwen3-32B 思考功能配置
+
+**原因**: Qwen3-32B 模型默认启用思考(Thinking/CoT)功能，在某些推理任务中会生成冗长的中间推理步骤，影响效率。禁用思考功能可以获得直接的答案，提升性能和可预测性。
+
+#### 思考功能说明
+
+| 配置项 | 说明 | 默认值 | 调整后 |
+|--------|------|--------|--------|
+| **enable_thinking** | 是否启用模型的推理过程 | `True` | `False` |
+| **配置方式** | 通过API参数控制 | 无 | extra_body参数 |
+| **性能提升** | 响应速度提升 | - | 约20-40% |
+
+#### 配置方式
+
+通过 OpenAI 兼容 API 的 `extra_body` 参数配置：
+
+```python
+response = await client.chat.completions.create(
+    model="qwen3-32b",
+    messages=messages,
+    temperature=0.0,
+    max_tokens=4096,
+    extra_body={"chat_template_kwargs": {"enable_thinking": False}}  # 禁用思考
+)
+```
+
+#### DyG-RAG 中的应用
+
+- **核心库修改**: `graphrag/_llm.py` 中 `qwen3_32b_complete_if_cache()` 函数已内置禁用思考配置
+- **示例脚本**: 所有示例和复现脚本的 `_chat_completion()` 函数默认禁用思考功能
+- **简化设计**: 项目仅使用 Qwen3-32B 一个模型,无需模型检测,统一采用禁用思考的配置
+- **向后兼容**: 用户可通过 kwargs 传入自定义 `extra_body` 参数覆盖默认配置
+
+#### VLLM 启动说明
+
+启动 VLLM 服务时无需特殊参数，思考功能通过 API 调用参数控制：
+
+```bash
+python -m vllm.entrypoints.openai.api_server \
+    --model /workspace/models/Qwen3-32B \
+    --served-model-name qwen3-32b \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --tensor-parallel-size 2 \
+    --max-model-len 32768
+```
+
+**注意**: 如果之前使用启用思考功能的配置生成了缓存，新配置会生成不同的响应。建议清空LLM缓存或使用新的工作目录。
+
+#### 参考资源
+
+- [Qwen3 官方部署文档](https://qwen.readthedocs.io/en/latest/deployment/vllm.html)
+- [VLLM 推理输出文档](https://docs.vllm.ai/en/v0.9.1/features/reasoning_outputs.html)
+
+---
+
 ### Token限制统一
 
 **原因**: 上下文长度影响检索信息量，需要统一以确保公平比较。

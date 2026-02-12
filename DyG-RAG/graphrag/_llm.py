@@ -399,6 +399,7 @@ async def qwen3_32b_complete_if_cache(
         messages=messages,
         temperature=kwargs.get("temperature", 0.0),  # Default to 0.0 for deterministic output
         max_tokens=kwargs.get("max_tokens", 4096),
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
 
     # Cache result

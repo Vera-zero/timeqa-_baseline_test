@@ -160,6 +160,12 @@ def _build_async_client() -> AsyncOpenAI:
 
 async def _chat_completion(model: str, messages: list[dict[str, str]], **kwargs) -> str:
     client = _build_async_client()
+
+    # 为 Qwen3-32B 默认禁用思考功能
+    extra_body = kwargs.pop("extra_body", {})
+    extra_body["chat_template_kwargs"] = {"enable_thinking": False}
+    kwargs["extra_body"] = extra_body
+
     response = await client.chat.completions.create(model=model, messages=messages, **kwargs)
     return response.choices[0].message.content
 
