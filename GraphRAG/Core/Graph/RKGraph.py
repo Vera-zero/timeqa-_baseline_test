@@ -2,6 +2,8 @@ import re
 import asyncio
 from collections import defaultdict
 from typing import Union, List, Any
+from tqdm import tqdm
+from tqdm.asyncio import tqdm as async_tqdm
 from Core.Graph.BaseGraph import BaseGraph
 from Core.Common.Logger import logger
 from Core.Common.Utils import (
@@ -56,8 +58,11 @@ class RKGraph(BaseGraph):
 
     async def _build_graph(self, chunk_list: List[Any]):
         try:
-            elements = await asyncio.gather(
-                *[self._extract_entity_relationship(chunk) for chunk in chunk_list])
+            elements = await async_tqdm.gather(
+                *[self._extract_entity_relationship(chunk) for chunk in chunk_list],
+                desc="🔍 Extracting records & relationships",
+                total=len(chunk_list)
+            )
             # Build graph based on the extracted entities and triples
             await self.__graph__(elements)
         except Exception as e:
@@ -105,7 +110,7 @@ class RKGraph(BaseGraph):
     async def _build_graph_from_records(self, records: list[str], chunk_key: str):
         maybe_nodes, maybe_edges = defaultdict(list), defaultdict(list)
 
-        for record in records:
+        for record in tqdm(records, desc="📋 Processing records", leave=False):
             match = re.search(r"\((.*)\)", record)
             if match is None:
                 continue

@@ -3,6 +3,8 @@ from Core.Common.Logger import logger
 import os
 import faiss
 from typing import Any
+from tqdm import tqdm
+from tqdm.asyncio import tqdm as async_tqdm
 from llama_index.core.schema import (
     Document,
     TextNode
@@ -64,36 +66,40 @@ class FaissIndex(BaseIndex):
             )
             return document
         Settings.embed_model = self.config.embed_model
-        documents = await asyncio.gather(*[process_document(data) for data in datas])
-        texts = [doc.text for doc in documents] 
+        documents = await async_tqdm.gather(
+            *[process_document(data) for data in datas],
+            desc="📊 Processing index documents",
+            total=len(datas)
+        )
+        texts = [doc.text for doc in documents]
         text_embeddings = []
         if isinstance(self.embedding_model, OpenAIEmbedding):
-            batch_size = self.embedding_model.embed_batch_size 
-            for i in range(0, len(texts), batch_size):
+            batch_size = self.embedding_model.embed_batch_size
+            for i in tqdm(range(0, len(texts), batch_size), desc="🔢 Computing embeddings"):
                 batch = texts[i:i + batch_size]
                 batch_embeddings = self.embedding_model._get_text_embeddings(batch)
                 text_embeddings.extend(batch_embeddings)
         else:
             text_embeddings = self.embedding_model._get_text_embeddings(texts)
 
-  
+
         vector_store = FaissVectorStore(faiss_index=faiss.IndexHNSWFlat(self.embedding_model._model.get_sentence_embedding_dimension(), 32))
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
         self._index =  VectorStoreIndex([], storage_context=storage_context,
             embed_model= self.config.embed_model)
-      
-      
-        
+
+
+
         nodes = []
-        for doc, embedding in zip(documents, text_embeddings):
+        for doc, embedding in tqdm(zip(documents, text_embeddings), total=len(documents), desc="📝 Creating index nodes"):
             node = TextNode(text=doc.text, embedding=embedding, metadata=doc.metadata)
             nodes.append(node)
         self._index.insert_nodes(nodes)
 
 
-          
-        
+
+
         logger.info("refresh index size is {}".format(len(documents)))
 
     async def _load_index(self) -> bool:

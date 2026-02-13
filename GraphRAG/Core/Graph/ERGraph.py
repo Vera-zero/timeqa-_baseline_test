@@ -3,6 +3,7 @@ import json
 import re
 from collections import defaultdict
 from typing import Any, List
+from tqdm.asyncio import tqdm as async_tqdm
 from Core.Graph.BaseGraph import BaseGraph
 from Core.Common.Logger import logger
 from Core.Common.Utils import (
@@ -82,8 +83,11 @@ class ERGraph(BaseGraph):
 
     async def _build_graph(self, chunk_list: List[Any]):
         try:
-            results = await asyncio.gather(
-                *[self._extract_entity_relationship(chunk) for chunk in chunk_list])
+            results = await async_tqdm.gather(
+                *[self._extract_entity_relationship(chunk) for chunk in chunk_list],
+                desc="🔍 Extracting entities & relationships",
+                total=len(chunk_list)
+            )
             # Build graph based on the extracted entities and triples
             await self.__graph__(results)
         except Exception as e:

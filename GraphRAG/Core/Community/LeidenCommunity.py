@@ -4,6 +4,8 @@ Please refer to the Nano-GraphRAG: https://github.com/gusye1234/nano-graphrag/bl
 from Core.Community.BaseCommunity import BaseCommunity
 from collections import defaultdict
 from graspologic.partition import hierarchical_leiden
+from tqdm import tqdm
+from tqdm.asyncio import tqdm as async_tqdm
 from Core.Common.Utils import (
     community_report_from_json,
     list_to_quoted_csv_string,
@@ -41,6 +43,7 @@ class LeidenCommunity(BaseCommunity):
         if largest_cc is None:
             logger.warning("No largest connected component found, skipping Leiden clustering; Please check the input graph.")
             return None
+        logger.info("🔬 Running Leiden clustering algorithm...")
         community_mapping = hierarchical_leiden(
             largest_cc,
             max_cluster_size=max_cluster_size,
@@ -49,10 +52,10 @@ class LeidenCommunity(BaseCommunity):
         node_communities: dict[str, list[dict[str, str]]] = defaultdict(list)
 
         __levels = defaultdict(set)
-        for partition in community_mapping:
+        for partition in tqdm(community_mapping, desc="🏘️  Processing community partitions"):
             level_key = partition.level
             cluster_id = partition.cluster
-          
+
             node_communities[clean_str(partition.node)].append(
                 {"level": level_key, "cluster": str(cluster_id)}
             )
@@ -85,8 +88,10 @@ class LeidenCommunity(BaseCommunity):
             this_level_community_keys, this_level_community_values = zip(
                 *[(k, v) for k, v in zip(community_keys, community_values) if v.level == level]
             )
-            this_level_communities_reports = await asyncio.gather(
-                *[self._form_single_community_report(er_graph, c, community_datas) for c in this_level_community_values]
+            this_level_communities_reports = await async_tqdm.gather(
+                *[self._form_single_community_report(er_graph, c, community_datas) for c in this_level_community_values],
+                desc=f"📝 Generating community reports (Level {level})",
+                total=len(this_level_community_values)
             )
 
             community_datas.update(

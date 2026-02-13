@@ -5,6 +5,7 @@ from Core.Index.EmbeddingFactory import get_rag_embedding
 from Core.Prompt.RaptorPrompt import SUMMARIZE
 from Core.Storage.TreeGraphStorage import TreeGraphStorage
 from Core.Schema.TreeSchema import TreeNode
+from tqdm import tqdm
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -37,7 +38,7 @@ class TreeGraph(BaseGraph):
             max_clusters = min(50, len(embeddings))
             n_clusters = np.arange(1, max_clusters)
         bics = []
-        for n in n_clusters:
+        for n in tqdm(n_clusters, desc="🔬 GMM clustering"):
             # logger.info("GMM Cluster n = {n}".format(n=n))
             gm = GaussianMixture(n_components=n, random_state=random_state)
             gm.fit(embeddings)
@@ -127,7 +128,7 @@ class TreeGraph(BaseGraph):
                 completed_list.extend(as_completed(cluster_tasks))
                 time.sleep(4)
 
-        for task in completed_list:
+        for task in tqdm(completed_list, desc="🌳 Processing tree clusters"):
             i, local_clusters, n_local_clusters = task.result()
             global_indices = np.where(np.array([i in gc for gc in global_clusters]))[0]
             # global_cluster_embeddings_ = embeddings[global_indices]
@@ -261,11 +262,11 @@ class TreeGraph(BaseGraph):
     async def _batch_embed_and_assign(self, layer):
         current_layer = self._graph.get_layer(layer)
         texts = [node.text for node in current_layer]
-        # For openai embedding model 
+        # For openai embedding model
         embeddings = []
         batch_size = self.embedding_model.embed_batch_size
-        
-        for i in range(0, len(texts), batch_size):
+
+        for i in tqdm(range(0, len(texts), batch_size), desc=f"🔢 Computing embeddings for layer {layer}"):
             batch = texts[i:i + batch_size]
             batch_embeddings = self.embedding_model._get_text_embeddings(batch)
             embeddings.extend(batch_embeddings)
@@ -280,7 +281,7 @@ class TreeGraph(BaseGraph):
             start_id += 1
 
     async def _build_tree_from_leaves(self):
-        for layer in range(self.config.num_layers):  # build a new layer
+        for layer in tqdm(range(self.config.num_layers), desc="🌲 Building tree layers"):  # build a new layer
             logger.info("length of layer: {length}".format(length=len(self._graph.get_layer(layer))))
             if len(self._graph.get_layer(layer)) <= self.config.reduction_dimension + 1:
                 break

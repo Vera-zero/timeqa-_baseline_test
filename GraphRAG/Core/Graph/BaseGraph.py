@@ -5,6 +5,7 @@ import igraph as ig
 import numpy as np
 from lazy_object_proxy.utils import await_
 from scipy.sparse import csr_matrix
+from tqdm.asyncio import tqdm as async_tqdm
 
 from Core.Common.Logger import logger
 from typing import List
@@ -250,10 +251,18 @@ class BaseGraph(ABC):
                 maybe_edges[tuple(sorted(k))].extend(v)
 
         # Asynchronously merge and upsert nodes
-        await asyncio.gather(*[self._merge_nodes_then_upsert(k, v) for k, v in maybe_nodes.items()])
+        await async_tqdm.gather(
+            *[self._merge_nodes_then_upsert(k, v) for k, v in maybe_nodes.items()],
+            desc="🔗 Merging nodes",
+            total=len(maybe_nodes)
+        )
 
         # Asynchronously merge and upsert edges
-        await asyncio.gather(*[self._merge_edges_then_upsert(k[0], k[1], v) for k, v in maybe_edges.items()])
+        await async_tqdm.gather(
+            *[self._merge_edges_then_upsert(k[0], k[1], v) for k, v in maybe_edges.items()],
+            desc="🔗 Merging edges",
+            total=len(maybe_edges)
+        )
 
     async def _handle_entity_relation_summary(self, entity_or_relation_name: str, description: str) -> str:
         """

@@ -15,6 +15,7 @@ from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing as mp
 from pathlib import Path
+from tqdm import tqdm
 
 import torch
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
@@ -382,36 +383,38 @@ def get_chunks(new_docs, chunk_func=chunking_by_token_size, **chunk_func_params)
     new_docs_list = list(new_docs.items())
     docs = [new_doc[1]["content"] for new_doc in new_docs_list]
     doc_keys = [new_doc[0] for new_doc in new_docs_list]
-    
+
     # Extract document titles - first line usually works
     doc_titles = []
-    for doc in docs:
+    for doc in tqdm(docs, desc="Extracting doc titles", unit="doc"):
         title = doc.split('\n')[0].strip()
-        
+
         # If first line is too long, try first sentence
         if len(title) > 100:
             sentences = doc.split('.')
             title = sentences[0].strip()[:100] + '...' if len(sentences[0]) > 100 else sentences[0].strip()
-            
+
         if not title:
             title = "Untitled Document"  # Fallback
-            
+
         doc_titles.append(title)
 
     # Use OpenAI's tokenizer - seems to work well enough
     ENCODER = tiktoken.get_encoding("cl100k_base")
+    logger.info("Tokenizing documents...")
     tokens = ENCODER.encode_batch(docs, num_threads=16)  # TODO: make threads configurable
-    
+
+    logger.info(f"Creating chunks for {len(docs)} documents...")
     chunks = chunk_func(
         tokens, doc_keys=doc_keys, tiktoken_model=ENCODER, **chunk_func_params
     )
 
     # Add titles back to chunks and create hash IDs
-    for i, chunk in enumerate(chunks):
+    for i, chunk in enumerate(tqdm(chunks, desc="Processing chunks", unit="chunk")):
         doc_index = chunk["full_doc_id"]
         original_doc_index = doc_keys.index(doc_index)
         chunk["doc_title"] = doc_titles[original_doc_index]
-        
+
         inserting_chunks.update(
             {compute_mdhash_id(chunk["content"], prefix="chunk-"): chunk}
         )
@@ -481,28 +484,28 @@ async def extract_events(
 
     async def _process_events_only(chunk_key_dp: tuple[str, TextChunkSchema]):
         nonlocal already_processed, already_events
-        
+
         try:
             chunk_key = chunk_key_dp[0]
             chunk_dp = chunk_key_dp[1]
             doc_title = chunk_dp.get("doc_title", "")
             content = f"Title: {doc_title}\n\n{chunk_dp['content']}" if doc_title else chunk_dp["content"]
-            
+
             maybe_events = defaultdict(list)
-            
+
             event_hint_prompt = event_extract_prompt.replace("{input_text}", content)
-            
+
             current_event_result = await use_llm_func(event_hint_prompt)
             if isinstance(current_event_result, list):
                 current_event_result = current_event_result[0]["text"]
-             
+
             if not current_event_result or not str(current_event_result).strip():
                 logger.error(f"Empty response from LLM for chunk {chunk_key}")
                 logger.error(f"Raw response: '{current_event_result}'")
                 return {}
-            
+
             event_history = pack_user_ass_to_openai_messages(event_hint_prompt, current_event_result, using_amazon_bedrock)
-            combined_event_data = {"events": []} 
+            combined_event_data = {"events": []}
 
             # Extract JSON from first '{' to last '}'
             try:
@@ -533,13 +536,13 @@ async def extract_events(
             # Gleaning process
             for now_glean_index in range(config.event_extract_max_gleaning):
                 # logger.info(f"Starting gleaning iteration {now_glean_index + 1}/{config.event_extract_max_gleaning} for chunk {chunk_key}")
-                
+
                 glean_event_result = await use_llm_func(event_extract_continue_prompt, history_messages=event_history)
                 if isinstance(glean_event_result, list):
                     glean_event_result = glean_event_result[0]["text"]
-                
+
                 event_history += pack_user_ass_to_openai_messages(event_extract_continue_prompt, glean_event_result, using_amazon_bedrock)
-                
+
                 # Extract JSON from first '{' to last '}'
                 try:
                     start_idx = glean_event_result.find('{')
@@ -572,16 +575,16 @@ async def extract_events(
                 if if_loop_event_result != "yes":
                     # logger.info(f"Stopping gleaning for chunk {chunk_key} after {now_glean_index + 1} iterations")
                     break
-            
+
             # Process event data
             logger.info(f"Processing {len(combined_event_data.get('events', []))} total events for chunk {chunk_key}")
-            
+
             for event in combined_event_data.get("events", []):
                 try:
                     if not isinstance(event, dict):
                         logger.warning(f"Skipping non-dict event in chunk {chunk_key}: {type(event)}")
                         continue
-                        
+
                     sentence = event.get('sentence', '')
                     if not sentence or not isinstance(sentence, str):
                         logger.warning(f"Skipping event with invalid sentence in chunk {chunk_key}: '{sentence}'")
@@ -590,7 +593,7 @@ async def extract_events(
                     context = event.get('context', '')
                     if context and not isinstance(context, str):
                         context = ''
-                    
+
                     raw_time = event.get('time', 'static')
                     try:
                         normalized_time = normalize_timestamp(raw_time)
@@ -598,7 +601,7 @@ async def extract_events(
                         normalized_time = 'static'
 
                     event_id = compute_mdhash_id(f"{sentence}-{normalized_time}", prefix="event-")
- 
+
                     event_obj = {
                         "event_id": event_id,
                         "timestamp": normalized_time,
@@ -607,51 +610,55 @@ async def extract_events(
                         "source_id": chunk_key,
                         "entities_involved": []  # Temporarily empty, will be filled later by NER
                     }
-                    
+
                     if event_obj["sentence"]:  # Only add if sentence is not empty
                         maybe_events[event_id].append(event_obj)
                         already_events += 1
                         logger.debug(f"Added event {event_id} for chunk {chunk_key}: {sentence[:100]}...")
-                        
+
                 except Exception as event_err:
                     logger.error(f"Error processing individual event in chunk {chunk_key}: {event_err}")
                     logger.error(f"Problematic event data: {event}")
-            
+
             logger.info(f"Successfully processed {len(maybe_events)} unique events for chunk {chunk_key}")
-            
+
             already_processed += 1
-            
-            now_ticks = PROMPTS["process_tickers"][already_processed % len(PROMPTS["process_tickers"])]
-            print(f"{now_ticks} Event extraction: {already_processed}({already_processed*100//len(ordered_chunks)}%) chunks, "
-                  f"{already_events} events\r", end="", flush=True)
-            
+
             return dict(maybe_events)
-            
+
         except Exception as e:
             already_processed += 1
             logger.error(f"Failed to extract events from chunk {chunk_key_dp[0]}: {e}")
             return {}
 
     event_extraction_start = time.time()
+    logger.info(f"Starting event extraction for {len(ordered_chunks)} chunks...")
     try:
-        event_results = await asyncio.gather(
-            *[_process_events_only(c) for c in ordered_chunks],
-            return_exceptions=True
-        )
+        # Create tasks with progress bar
+        tasks = [_process_events_only(c) for c in ordered_chunks]
+        event_results = []
+
+        # Use tqdm to track progress
+        with tqdm(total=len(tasks), desc="Extracting events", unit="chunk") as pbar:
+            for coro in asyncio.as_completed(tasks):
+                result = await coro
+                event_results.append(result)
+                pbar.update(1)
+
         logger.info(f"\nEvent extraction completed, processing {len(event_results)} results")
-        
+
         # Merge all event results
         all_maybe_events = defaultdict(list)
         for result in event_results:
             if isinstance(result, Exception):
                 logger.error(f"Event extraction task failed: {result}")
                 continue
-                
+
             for k, v in result.items():
                 all_maybe_events[k].extend(v)
-                
+
         logger.info(f"Event extraction complete: {len(all_maybe_events)} unique events")
-        
+
     except Exception as e:
         logger.error(f"Error during event extraction phase: {e}")
         return None, {"failed": True, "phase": "event_extraction"}
@@ -678,15 +685,17 @@ async def extract_events(
         return None, {"failed": True, "phase": "ner_extraction"}
     
     phase_times["ner_extraction"] = time.time() - ner_extraction_start
-    
+
     event_merging_start = time.time()
+    logger.info("=== EVENT MERGING PHASE ===")
     maybe_events = all_maybe_events
     all_events_data = []
-    for k, v in maybe_events.items():
+    for k, v in tqdm(maybe_events.items(), desc="Merging events", unit="event"):
         event_data = await _merge_events_then_upsert(k, v, dyg_inst, global_config)
         all_events_data.append(event_data)
-    
+
     phase_times["event_merging"] = time.time() - event_merging_start
+    logger.info(f"Event merging complete: {len(all_events_data)} events merged and stored")
     
     relationship_computation_start = time.time()
     if len(maybe_events) > 1:
@@ -711,15 +720,17 @@ async def extract_events(
     if not len(all_events_data):
         logger.warning("No events found, maybe your LLM is not working")
         return None, {}
-        
+
     events_vdb_update_start = time.time()
+    logger.info("=== VECTOR DATABASE UPDATE PHASE ===")
     if events_vdb is not None and len(all_events_data) > 0:
         events_for_vdb = {}
-        for dp in all_events_data:
+        logger.info(f"Preparing {len(all_events_data)} events for vector database...")
+        for dp in tqdm(all_events_data, desc="Preparing VDB data", unit="event"):
             event_content_for_vdb = dp["sentence"]
             if dp["timestamp"] != "static":
                 event_content_for_vdb += f" (Time: {dp['timestamp']})"
-            
+
             events_for_vdb[dp["event_id"]] = {
                 "content": event_content_for_vdb,
                 "event_id": dp["event_id"],
@@ -728,14 +739,15 @@ async def extract_events(
                 "context": dp.get("context", ""),
                 "source_id": dp.get("source_id", "")
             }
-        
+
         try:
             if config.enable_timestamp_encoding:
                 logger.info(f"Using timestamp-enhanced vector storage for events")
                 for event_id, event_data in events_for_vdb.items():
                     if event_data["timestamp"] == "":
                         event_data["timestamp"] = "static"
-            
+
+            logger.info(f"Upserting {len(events_for_vdb)} events to vector database...")
             await events_vdb.upsert(events_for_vdb)
             logger.info(f"Updated events vector database with {len(events_for_vdb)} events")
         except Exception as e:
@@ -744,7 +756,7 @@ async def extract_events(
             else:
                 logger.error(f"Error during events_vdb.upsert: {e}", exc_info=True)
             logger.warning("Failed to update events vector database, but continuing")
-    
+
     phase_times["events_vdb_update"] = time.time() - events_vdb_update_start
     
     total_chunks = already_processed
@@ -910,20 +922,21 @@ async def batch_process_event_relationships_multiprocess(
     max_workers: int = None
 ):
     all_events = await dyg_inst.get_all_nodes()
-    
+
     valid_events = {}
-    for event_id, event_data in all_events.items():
+    logger.info("Filtering valid events for relationship computation...")
+    for event_id, event_data in tqdm(all_events.items(), desc="Filtering events", unit="event"):
         timestamp = event_data.get("timestamp", "static")
         entities = event_data.get("entities_involved", [])
         if timestamp != "static" and entities:
             valid_events[event_id] = event_data
-    
+
     if not valid_events:
         logger.info("No valid events found for relationship processing")
         return
-    
+
     logger.info(f"Processing {len(valid_events)} valid events for relationships")
-    
+
     # Prepare configuration parameters
     config_params = {
         "ent_factor": global_config.get("ent_factor", 0.2),
@@ -933,61 +946,65 @@ async def batch_process_event_relationships_multiprocess(
         "time_factor": global_config.get("time_factor", 1.0),
         "decay_rate": global_config.get("decay_rate", 0.01)
     }
-    
+
     # Batch events for processing
     event_ids = list(valid_events.keys())
     batches = []
-    
+
     for i in range(0, len(event_ids), batch_size):
         batch_events = {eid: valid_events[eid] for eid in event_ids[i:i+batch_size]}
         batches.append((batch_events, valid_events, config_params))
-    
+
     logger.info(f"Created {len(batches)} batches for multiprocess processing")
-    
+
     if max_workers is None:
         max_workers = min(mp.cpu_count(), len(batches))
-    
+
     all_relationships = []
-    
+
     loop = asyncio.get_event_loop()
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         logger.info(f"Starting multiprocess computation with {max_workers} workers")
-        
+
         futures = [
             loop.run_in_executor(executor, compute_event_relationships_batch, batch_data)
             for batch_data in batches
         ]
-        
-        batch_results = await asyncio.gather(*futures, return_exceptions=True)
-        
-        for i, result in enumerate(batch_results):
-            if isinstance(result, Exception):
-                logger.error(f"Batch {i} failed: {result}")
-            else:
-                all_relationships.extend(result)
-    
+
+        # Use tqdm to track batch processing progress
+        logger.info("Computing event relationships...")
+        with tqdm(total=len(futures), desc="Computing relationships", unit="batch") as pbar:
+            for future in asyncio.as_completed(futures):
+                result = await future
+                if isinstance(result, Exception):
+                    logger.error(f"Batch failed: {result}")
+                else:
+                    all_relationships.extend(result)
+                pbar.update(1)
+
     logger.info(f"Computed {len(all_relationships)} relationships, now updating graph")
-    
+
     edge_updates = []
     for src_id, tgt_id, edge_data in all_relationships:
         edge_updates.append((src_id, tgt_id, edge_data))
-    
+
     write_batch_size = 1000
     total_updates = len(edge_updates)
-    
-    for i in range(0, total_updates, write_batch_size):
-        batch_updates = edge_updates[i:i+write_batch_size]
-        
-        update_tasks = [
-            dyg_inst.upsert_edge(src_id, tgt_id, edge_data=edge_data)
-            for src_id, tgt_id, edge_data in batch_updates
-        ]
-        
-        await asyncio.gather(*update_tasks, return_exceptions=True)
-        
-        progress = min(i + write_batch_size, total_updates)
-        logger.info(f"Updated {progress}/{total_updates} edges ({progress*100//total_updates}%)")
-    
+
+    logger.info(f"Writing {total_updates} edges to graph...")
+    with tqdm(total=total_updates, desc="Writing edges", unit="edge") as pbar:
+        for i in range(0, total_updates, write_batch_size):
+            batch_updates = edge_updates[i:i+write_batch_size]
+
+            update_tasks = [
+                dyg_inst.upsert_edge(src_id, tgt_id, edge_data=edge_data)
+                for src_id, tgt_id, edge_data in batch_updates
+            ]
+
+            await asyncio.gather(*update_tasks, return_exceptions=True)
+
+            pbar.update(len(batch_updates))
+
     logger.info(f"Successfully processed all {total_updates} event relationships")
 
 
@@ -1060,7 +1077,7 @@ class BatchNERExtractor:
     def extract_entities_batch(self, sentences: List[str]) -> List[List[str]]:
         if not sentences:
             return []
-        
+
         try:
             valid_sentences = []
             sentence_indices = []
@@ -1068,21 +1085,28 @@ class BatchNERExtractor:
                 if sentence and isinstance(sentence, str) and sentence.strip():
                     valid_sentences.append(sentence.strip())
                     sentence_indices.append(i)
-            
+
             if not valid_sentences:
                 return [[] for _ in sentences]
-            
+
             logger.info(f"Processing {len(valid_sentences)} sentences with NER model")
-            
-            ner_results = self.ner_pipeline(valid_sentences)
-            
+
+            # Process with progress bar
+            ner_results = []
+            with tqdm(total=len(valid_sentences), desc="NER processing", unit="sentence") as pbar:
+                for i in range(0, len(valid_sentences), self.batch_size):
+                    batch = valid_sentences[i:i+self.batch_size]
+                    batch_results = self.ner_pipeline(batch)
+                    ner_results.extend(batch_results)
+                    pbar.update(len(batch))
+
             all_entities = [[] for _ in sentences]
-            
+
             for idx, (sentence_idx, sentence_entities) in enumerate(zip(sentence_indices, ner_results)):
                 logger.debug(f"Processing sentence {idx}: found {len(sentence_entities)} raw entities")
                 entities = self._process_ner_result(sentence_entities)
                 all_entities[sentence_idx] = entities
-            
+
             total_extracted = sum(len(entities) for entities in all_entities)
             logger.info(f"Extracted {total_extracted} entities from {len(valid_sentences)} sentences")
             
@@ -1128,31 +1152,33 @@ class BatchNERExtractor:
     def extract_entities_from_events(self, events_data: Dict[str, List[Dict]]) -> Dict[str, List[Dict]]:
         if not events_data:
             return events_data
-        
+
         sentences = []
         event_mapping = []  # (event_id, event_index)
-        
-        for event_id, event_list in events_data.items():
+
+        logger.info(f"Collecting sentences from {len(events_data)} events...")
+        for event_id, event_list in tqdm(events_data.items(), desc="Collecting sentences", unit="event"):
             for idx, event_obj in enumerate(event_list):
                 sentence = event_obj.get("sentence", "")
                 if sentence:
                     sentences.append(sentence)
                     event_mapping.append((event_id, idx))
-        
+
         if not sentences:
             logger.warning("No valid sentences found for NER extraction")
             return events_data
-        
+
         logger.info(f"Extracting entities from {len(sentences)} event sentences")
-        
+
         batch_entities = self.extract_entities_batch(sentences)
-        
+
         # Map entities back to their events
-        for (event_id, event_idx), entities in zip(event_mapping, batch_entities):
+        logger.info("Mapping entities back to events...")
+        for (event_id, event_idx), entities in tqdm(zip(event_mapping, batch_entities), total=len(event_mapping), desc="Mapping entities", unit="event"):
             if event_id in events_data and event_idx < len(events_data[event_id]):
                 events_data[event_id][event_idx]["entities_involved"] = entities
-        
+
         total_entities = sum(len(entities) for entities in batch_entities)
         logger.info(f"NER extraction completed: {total_entities} entities extracted")
-        
+
         return events_data

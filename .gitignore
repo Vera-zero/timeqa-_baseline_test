@@ -6,3 +6,7 @@ models/
 
 # QA Results
 QA-result/
+
+# Python cache
+DyG-RAG/**/__pycache__/
+DyG-RAG/graphrag/__pycache__/

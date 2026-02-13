@@ -1,4 +1,5 @@
 import asyncio
+from tqdm import tqdm
 from Core.Chunk.ChunkFactory import create_chunk_method
 from Core.Common.Utils import mdhash_id
 from Core.Common.Logger import logger
@@ -67,7 +68,7 @@ class DocChunk:
                 max_token_size=self.config.chunk_token_size,
             )
 
-            for chunk in chunks:
+            for chunk in tqdm(chunks, desc="📄 Processing chunks", unit="chunk"):
                 chunk["chunk_id"] = mdhash_id(chunk["content"], prefix="chunk-")
                 await self._chunk.upsert(chunk["chunk_id"], TextChunk(**chunk))
 

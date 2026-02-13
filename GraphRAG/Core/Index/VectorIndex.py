@@ -2,6 +2,7 @@ from Core.Common.Utils import mdhash_id
 from Core.Common.Logger import logger
 import os
 from typing import Any
+from tqdm.asyncio import tqdm as async_tqdm
 from llama_index.core.schema import (
     Document
 )
@@ -58,7 +59,11 @@ class VectorIndex(BaseIndex):
             )
             return document
 
-        documents = await asyncio.gather(*[process_document(data) for data in datas])
+        documents = await async_tqdm.gather(
+            *[process_document(data) for data in datas],
+            desc="📊 Processing index documents",
+            total=len(datas)
+        )
         parser = SimpleNodeParser.from_defaults()
         nodes = parser.get_nodes_from_documents(documents)
         self._index = VectorStoreIndex(nodes)

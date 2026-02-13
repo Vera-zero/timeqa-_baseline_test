@@ -20,6 +20,7 @@ from datetime import datetime
 from nano_vectordb import NanoVectorDB
 import numpy as np
 from copy import deepcopy
+from tqdm import tqdm
 
 from .prompt import PROMPTS, GRAPH_FIELD_SEP
 
@@ -909,14 +910,17 @@ class GraphRAG:
 
             # 文档哈希计算
             hash_start = time.time()
-            new_docs = {
-                compute_mdhash_id(c.strip(), prefix="doc-"): {"content": c.strip()}
-                for c in string_or_strings
-            }
+            new_docs = {}
+            with tqdm(total=len(string_or_strings), desc="Computing doc hashes", unit="doc") as pbar:
+                for c in string_or_strings:
+                    doc_id = compute_mdhash_id(c.strip(), prefix="doc-")
+                    new_docs[doc_id] = {"content": c.strip()}
+                    pbar.update(1)
             doc_timing["doc_hash_computation"] = time.time() - hash_start
 
             # 去重检查
             dedup_start = time.time()
+            logger.info("Checking for duplicate documents...")
             _add_doc_keys = await self.full_docs.filter_keys(list(new_docs.keys()))
             new_docs = {k: v for k, v in new_docs.items() if k in _add_doc_keys}
             doc_timing["doc_deduplication"] = time.time() - dedup_start
@@ -929,6 +933,7 @@ class GraphRAG:
 
             # Save docs immediately
             write_start = time.time()
+            logger.info("Saving documents to storage...")
             await self.full_docs.upsert(new_docs)
             doc_timing["doc_storage_write"] = time.time() - write_start
             doc_timing["total_time"] = time.time() - doc_start
@@ -953,15 +958,18 @@ class GraphRAG:
 
             # Check if chunks already exist for these docs
             chunk_check_start = time.time()
+            logger.info("Checking for existing chunks...")
             all_chunk_keys = await self.text_chunks.all_keys()
             doc_ids = set(new_docs.keys())
             existing_chunks = {}
 
             # Look for chunks that belong to our new docs
-            for chunk_key in all_chunk_keys:
-                chunk_data = await self.text_chunks.get_by_id(chunk_key)
-                if chunk_data and chunk_data.get("full_doc_id") in doc_ids:
-                    existing_chunks[chunk_key] = chunk_data
+            with tqdm(total=len(all_chunk_keys), desc="Checking chunks", unit="chunk", disable=len(all_chunk_keys)==0) as pbar:
+                for chunk_key in all_chunk_keys:
+                    chunk_data = await self.text_chunks.get_by_id(chunk_key)
+                    if chunk_data and chunk_data.get("full_doc_id") in doc_ids:
+                        existing_chunks[chunk_key] = chunk_data
+                    pbar.update(1)
 
             if existing_chunks:
                 logger.info(f"Found {len(existing_chunks)} existing chunks, skipping chunking")
