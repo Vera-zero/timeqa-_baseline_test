@@ -92,7 +92,7 @@ class GraphRAG:
         List[Dict[str, Union[str, int]]],
     ] = chunking_by_token_size
     chunk_token_size: int = 1200
-    chunk_overlap_token_size: int = 64
+    chunk_overlap_token_size: int = 100
     tiktoken_model_name: str = "cl100k_base"
 
     # dynamic event extraction
