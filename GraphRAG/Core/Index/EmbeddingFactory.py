@@ -70,18 +70,50 @@ class RAGEmbeddingFactory(GenericFactory):
         return OllamaEmbedding(**params)
 
     def _create_hf(self, config) -> HuggingFaceEmbedding:
+        import torch
+
+        # Auto-select GPU with most free memory from GPU 0 and 1
+        def get_best_gpu():
+            """Select GPU 0 or 1 based on available memory."""
+            if not torch.cuda.is_available():
+                return "cpu"
+
+            try:
+                # Only check GPU 0 and 1
+                max_free_memory = -1
+                best_gpu = 0
+
+                for gpu_id in [0, 1]:
+                    if gpu_id < torch.cuda.device_count():
+                        free_memory = torch.cuda.mem_get_info(gpu_id)[0]  # bytes free
+                        print(f"GPU {gpu_id}: {free_memory / 1024**3:.2f} GB free")
+
+                        if free_memory > max_free_memory:
+                            max_free_memory = free_memory
+                            best_gpu = gpu_id
+
+                print(f"Selected GPU {best_gpu} with {max_free_memory / 1024**3:.2f} GB free memory")
+                return f"cuda:{best_gpu}"
+            except Exception as e:
+                print(f"Error detecting GPU, falling back to cuda:0: {e}")
+                return "cuda:0"
+
+        # Get the best available GPU
+        selected_device = get_best_gpu()
 
         # For huggingface-hub embedding model, we only need to set the model_name
         params = dict(
             model_name=config.embedding.model,
             cache_folder=config.embedding.cache_folder,
-            device = "cuda",
-            target_devices = ["cuda:0"],
+            device = selected_device,
+            target_devices = [selected_device] if selected_device.startswith("cuda") else None,
             embed_batch_size = config.embedding.embed_batch_size or 128,
             trust_remote_code=True,
         )
         if config.embedding.cache_folder == "":
             del params["cache_folder"]
+        if params["target_devices"] is None:
+            del params["target_devices"]
         return HuggingFaceEmbedding(**params)
     
     @staticmethod

@@ -20,12 +20,13 @@ from Core.Utils.MergeER import MergeEntity, MergeRelationship
 
 class BaseGraph(ABC):
 
-    def __init__(self, config, llm, encoder):
+    def __init__(self, config, llm, encoder, time_manager=None):
         self.working_memory: Memory = Memory()  # Working memory
         self.config = config  # Build graph config
         self.llm = llm  # LLM instance
         self.ENCODER = encoder  # Encoder
         self._graph = None
+        self.time_manager = time_manager
 
     async def build_graph(self, chunks, force: bool = False):
         """
@@ -46,7 +47,11 @@ class BaseGraph(ABC):
             # Build the graph based on the input chunks
             await self._build_graph(chunks)
             # Persist the graph into file
+            if self.time_manager:
+                self.time_manager.start_named_phase("graph_storage_write")
             await self._persist_graph(force)
+            if self.time_manager:
+                self.time_manager.end_named_phase("graph_storage_write")
         logger.info("✅ Finished the graph building stage")
 
     async def _load_graph(self, force: bool = False):

@@ -29,30 +29,21 @@ def always_get_an_event_loop() -> asyncio.AbstractEventLoop:
 
 
 def extract_first_complete_json(s: str):
-    """Extract the first complete JSON object from the string using a stack to track braces."""
-    stack = []
-    first_json_start = None
-    
-    for i, char in enumerate(s):
-        if char == '{':
-            stack.append(i)
-            if first_json_start is None:
-                first_json_start = i
-        elif char == '}':
-            if stack:
-                start = stack.pop()
-                if not stack:
-                    first_json_str = s[first_json_start:i+1]
-                    try:
-                        # Attempt to parse the JSON string
-                        return json.loads(first_json_str.replace("\n", ""))
-                    except json.JSONDecodeError as e:
-                        logger.error(f"JSON decoding failed: {e}. Attempted string: {first_json_str[:50]}...")
-                        return None
-                    finally:
-                        first_json_start = None
-    logger.warning("No complete JSON object found in the input string.")
-    return None
+    """Extract JSON from first '{' to last '}' and parse as standard JSON."""
+    start_idx = s.find('{')
+    end_idx = s.rfind('}')
+
+    if start_idx == -1 or end_idx == -1 or start_idx >= end_idx:
+        logger.warning("No valid JSON brackets found in the input string.")
+        return None
+
+    json_str = s[start_idx:end_idx + 1]
+    try:
+        # Attempt to parse the JSON string
+        return json.loads(json_str)
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decoding failed: {e}. Attempted string: {json_str[:200]}...")
+        return None
 
 def parse_value(value: str):
     """Convert a string value to its appropriate type (int, float, bool, None, or keep as string). Work as a more broad 'eval()'"""
@@ -272,3 +263,50 @@ def wrap_embedding_func_with_attrs(**kwargs):
         return new_func
 
     return final_decro
+
+
+# Timing utilities ------------------------------------------------------------------------
+def save_timing_to_file(working_dir: str, stage: str, phase_times: dict, total_time: float = None):
+    """
+    保存阶段计时数据到 time_used.json 文件
+
+    Args:
+        working_dir: 工作目录
+        stage: 阶段名称 (如 'document_processing', 'chunking', 'event_extraction', 'dynamic_query')
+        phase_times: 各子阶段耗时字典
+        total_time: 总耗时（如果为 None，则自动计算）
+    """
+    import datetime
+
+    if total_time is None:
+        total_time = sum(phase_times.values())
+
+    time_file = os.path.join(working_dir, "time_used.json")
+
+    # 读取现有数据
+    timing_records = []
+    if os.path.exists(time_file):
+        try:
+            with open(time_file, 'r', encoding='utf-8') as f:
+                timing_records = json.load(f)
+        except Exception as e:
+            logger.warning(f"Failed to load existing time_used.json: {e}")
+            timing_records = []
+
+    # 添加新记录
+    new_record = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "stage": stage,
+        "phase_times": phase_times,
+        "total_time": total_time
+    }
+    timing_records.append(new_record)
+
+    # 写回文件
+    try:
+        with open(time_file, 'w', encoding='utf-8') as f:
+            json.dump(timing_records, f, indent=2, ensure_ascii=False)
+        logger.info(f"Saved timing for stage '{stage}': {total_time:.3f}s to {time_file}")
+    except Exception as e:
+        logger.error(f"Failed to save timing data: {e}")
+

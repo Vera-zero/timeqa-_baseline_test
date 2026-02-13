@@ -7,6 +7,7 @@ import os, json, time, asyncio, logging, re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List
+from datetime import datetime
 
 import numpy as np
 from tqdm import tqdm
@@ -129,11 +130,15 @@ class EmbeddingFunc:
 def get_qwen_embedding_func() -> EmbeddingFunc:
     gpu_count = torch.cuda.device_count()
     using_cuda = gpu_count > 0
-    device = "cuda" if using_cuda else "cpu"
+    # Use cuda:0 explicitly to avoid device mismatch issues with multi-GPU
+    device = "cuda:0" if using_cuda else "cpu"
 
+    # Always use single device to prevent tensor device mismatch
+    # When device_map="auto", tensors can end up on different GPUs (cuda:0, cuda:1)
+    # causing "Expected all tensors to be on the same device" errors
     model_kwargs = {}
     if gpu_count > 1:
-        model_kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
+        model_kwargs = {"torch_dtype": torch.float16}
 
     st_model = SentenceTransformer(
         LOCAL_QWEN_EMBEDDING_PATH,
@@ -253,6 +258,35 @@ for idx, obj in enumerate(tqdm(all_questions_list, desc="Loading questions", tot
  
 graph_func.insert(all_docs)
 
-for question in all_questions:
-    ans =graph_func.query(question, param=QueryParam(mode="dynamic"))
-    print(ans)
+# Collect results
+results = []
+print(f"\n开始处理 {len(all_questions)} 个问题...")
+for idx, question in enumerate(tqdm(all_questions, desc="Processing questions")):
+    ans = graph_func.query(question, param=QueryParam(mode="dynamic"))
+    results.append({
+        "question_idx": idx,
+        "question": question,
+        "answer": ans
+    })
+    print(f"\nQuestion {idx + 1}/{len(all_questions)}: {question}")
+    print(f"Answer: {ans}\n")
+
+# Save results to JSON
+output_file = WORK_DIR / "results.json"
+output_data = {
+    "metadata": {
+        "dataset": "timeqa",
+        "total_questions": len(all_questions),
+        "total_docs": len(all_docs),
+        "processed_time": datetime.now().isoformat(),
+        "corpus_file": str(CORPUS_FILE)
+    },
+    "results": results
+}
+
+with open(output_file, 'w', encoding='utf-8') as f:
+    json.dump(output_data, f, ensure_ascii=False, indent=2)
+
+print(f"\n✅ 结果已保存到: {output_file}")
+print(f"   - 处理问题数: {len(all_questions)}")
+print(f"   - 文档数: {len(all_docs)}")

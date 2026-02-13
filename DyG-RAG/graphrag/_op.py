@@ -504,8 +504,18 @@ async def extract_events(
             event_history = pack_user_ass_to_openai_messages(event_hint_prompt, current_event_result, using_amazon_bedrock)
             combined_event_data = {"events": []} 
 
+            # Extract JSON from first '{' to last '}'
             try:
-                parsed_data = json.loads(current_event_result)
+                start_idx = current_event_result.find('{')
+                end_idx = current_event_result.rfind('}')
+
+                if start_idx == -1 or end_idx == -1 or start_idx >= end_idx:
+                    logger.error(f"No valid JSON brackets found in response for chunk {chunk_key}")
+                    logger.error(f"Response content: '{current_event_result[:200]}...'")
+                    parsed_data = None
+                else:
+                    json_str = current_event_result[start_idx:end_idx + 1]
+                    parsed_data = json.loads(json_str)
                 # logger.info(f"Successfully parsed JSON for chunk {chunk_key}")
                 if isinstance(parsed_data, dict) and "events" in parsed_data:
                     combined_event_data["events"].extend(parsed_data["events"])
@@ -514,29 +524,11 @@ async def extract_events(
                     logger.warning(f"Parsed JSON does not contain 'events' key for chunk {chunk_key}")
                     logger.warning(f"Parsed data keys: {list(parsed_data.keys()) if isinstance(parsed_data, dict) else 'not a dict'}")
             except json.JSONDecodeError as e:
-                logger.error(f"Initial event JSON parsing error for chunk {chunk_key}: {e}")
-                logger.error(f"Failed to parse: '{current_event_result}'")
-                logger.error(f"Error details: line {e.lineno}, column {e.colno}, pos {e.pos}")
-                
-                try:
-                    start_idx = current_event_result.find('{')
-                    end_idx = current_event_result.rfind('}') + 1
-                    # logger.info(f"Attempting JSON recovery: start_idx={start_idx}, end_idx={end_idx}")
-                    
-                    if start_idx >= 0 and end_idx > start_idx:
-                        json_str = current_event_result[start_idx:end_idx]
-                        # logger.info(f"Extracted JSON substring: '{json_str[:200]}...'")
-                        parsed_data = json.loads(json_str)
-                        if isinstance(parsed_data, dict) and "events" in parsed_data:
-                            combined_event_data["events"].extend(parsed_data["events"])
-                            # logger.info(f"Recovery successful: found {len(parsed_data['events'])} events")
-                        else:
-                            logger.warning(f"Recovery failed: no 'events' key in recovered JSON")
-                    else:
-                        logger.error(f"Could not find JSON brackets in response: start_idx={start_idx}, end_idx={end_idx}")
-                except Exception as inner_e:
-                    logger.error(f"Failed to recover JSON for chunk {chunk_key}: {inner_e}")
-                    logger.error(f"Recovery attempt failed on: '{json_str[:200] if 'json_str' in locals() else 'N/A'}...'")
+                logger.error(f"JSON parsing error for chunk {chunk_key}: {e}")
+                logger.error(f"Error details: line {e.lineno}, column {e.colno}")
+                logger.error(f"Failed to parse extracted JSON: '{json_str[:200] if 'json_str' in locals() else 'N/A'}...'")
+            except Exception as e:
+                logger.error(f"Unexpected error during JSON extraction for chunk {chunk_key}: {e}")
 
             # Gleaning process
             for now_glean_index in range(config.event_extract_max_gleaning):
@@ -548,16 +540,28 @@ async def extract_events(
                 
                 event_history += pack_user_ass_to_openai_messages(event_extract_continue_prompt, glean_event_result, using_amazon_bedrock)
                 
+                # Extract JSON from first '{' to last '}'
                 try:
-                    gleaned_data = json.loads(glean_event_result)
-                    if isinstance(gleaned_data, dict) and "events" in gleaned_data:
-                        combined_event_data["events"].extend(gleaned_data["events"])
-                        # logger.info(f"Gleaning iteration {now_glean_index + 1}: found {len(gleaned_data['events'])} additional events")
+                    start_idx = glean_event_result.find('{')
+                    end_idx = glean_event_result.rfind('}')
+
+                    if start_idx == -1 or end_idx == -1 or start_idx >= end_idx:
+                        logger.error(f"No valid JSON brackets in gleaning response for chunk {chunk_key}, iteration {now_glean_index + 1}")
                     else:
-                        logger.warning(f"Gleaning iteration {now_glean_index + 1}: no 'events' key in response")
+                        json_str = glean_event_result[start_idx:end_idx + 1]
+                        gleaned_data = json.loads(json_str)
+
+                        if isinstance(gleaned_data, dict) and "events" in gleaned_data:
+                            combined_event_data["events"].extend(gleaned_data["events"])
+                            # logger.info(f"Gleaning iteration {now_glean_index + 1}: found {len(gleaned_data['events'])} additional events")
+                        else:
+                            logger.warning(f"Gleaning iteration {now_glean_index + 1}: no 'events' key in response")
+
                 except json.JSONDecodeError as e:
-                    logger.error(f"Gleaning event JSON parsing error for chunk {chunk_key}, iteration {now_glean_index + 1}: {e}")
-                    logger.error(f"Failed to parse gleaning response: '{glean_event_result}'")
+                    logger.error(f"Gleaning JSON parsing error for chunk {chunk_key}, iteration {now_glean_index + 1}: {e}")
+                    logger.error(f"Failed to parse: '{json_str[:200] if 'json_str' in locals() else 'N/A'}...'")
+                except Exception as e:
+                    logger.error(f"Unexpected error in gleaning for chunk {chunk_key}, iteration {now_glean_index + 1}: {e}")
 
                 if now_glean_index == config.event_extract_max_gleaning - 1:
                     break
@@ -797,7 +801,17 @@ async def extract_events(
             logger.info(f"Debug information written to debug.txt for {len(all_events_data)} events")
         except Exception as e:
             logger.error(f"Failed to write debug information: {e}")
-    
+
+    # 保存计时数据到 time_used.json
+    from ._utils import save_timing_to_file
+    working_dir = global_config.get("working_dir", "./dyg_rag_cache")
+    save_timing_to_file(
+        working_dir=working_dir,
+        stage="event_extraction",
+        phase_times=phase_times,
+        total_time=total_extraction_time
+    )
+
     return dyg_inst, stats
 
 async def _merge_events_then_upsert(

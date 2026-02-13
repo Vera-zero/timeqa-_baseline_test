@@ -67,10 +67,11 @@ class GraphRAG(ContextMixin, BaseModel):
     def _update_context(cls, data):
         # cls.config = data.config
         cls.ENCODER = tiktoken.encoding_for_model(data.config.token_model)
-        cls.workspace = Workspace(data.config.working_dir, data.config.index_name)  # register workspace
-        cls.graph = get_graph(data.config, llm=data.llm, encoder=cls.ENCODER)  # register graph
-        cls.doc_chunk = DocChunk(data.config.chunk, cls.ENCODER, data.workspace.make_for("chunk_storage"))
+        # 不再需要 index_name 作为子目录，因为 working_dir 已经包含方法名
+        cls.workspace = Workspace(data.config.working_dir, exp_name=None)  # register workspace
         cls.time_manager = TimeStatistic()
+        cls.graph = get_graph(data.config, llm=data.llm, encoder=cls.ENCODER, time_manager=cls.time_manager)  # register graph
+        cls.doc_chunk = DocChunk(data.config.chunk, cls.ENCODER, data.workspace.make_for("chunk_storage"), cls.time_manager)
         cls.retriever_context = RetrieverContext()
         data = cls._init_storage_namespace(data)
         data = cls._register_vdbs(data)
@@ -180,8 +181,8 @@ class GraphRAG(ContextMixin, BaseModel):
                     config_value = getattr(self, context_name)
                     if context_name == "config":
                         config_value = self.config.retriever
-                    self.retriever_context.register_context(context_name, config_value)   
-            self._querier = get_query(self.config.retriever.query_type, self.config.query, self.retriever_context)
+                    self.retriever_context.register_context(context_name, config_value)
+            self._querier = get_query(self.config.retriever.query_type, self.config.query, self.retriever_context, self.time_manager)
 
         except Exception as e:
             logger.error(f"Failed to build retriever context: {e}")
@@ -221,60 +222,85 @@ class GraphRAG(ContextMixin, BaseModel):
             docs (Union[str, list[[Any]]): A list of documents to be processed and inserted into the Graph RAG pipeline.
         """
 
-        
+
         # Step 1.  Chunking Stage
-        self.time_manager.start_stage()
+        self.time_manager.start_stage("chunking")
+        self.time_manager.start_named_phase("doc_processing")
         await self.doc_chunk.build_chunks(docs)
+        self.time_manager.end_named_phase("doc_processing")
         self._update_costs_info("Chunking")
-        
-        
+        self.time_manager.save_stage_details("chunking")
+
+
         # Step 2. Building Graph Stage
+        self.time_manager.start_stage("build_graph")
+        self.time_manager.start_named_phase("graph_construction")
         await self.graph.build_graph(await self.doc_chunk.get_chunks(), self.config.graph.force)
+        self.time_manager.end_named_phase("graph_construction")
         self._update_costs_info("Build Graph")
-        
+        self.time_manager.save_stage_details("build_graph")
+
         # Index building Stage (Data-driven content should be pre-built offline to ensure efficient online query performance.)
-        
+        self.time_manager.start_stage("index_building")
+
         # NOTE: ** Ensure the graph is successfully loaded before proceeding to load the index from storage, as it represents a one-to-one mapping. **
         if self.config.use_entities_vdb:
+            self.time_manager.start_named_phase("entities_vdb_building")
             node_metadata = await self.graph.node_metadata()
             if not node_metadata:
                 logger.warning("No node metadata found. Skipping entity indexing.")
-          
-            await self.entities_vdb.build_index(await self.graph.nodes_data(),node_metadata, False)
 
-        # Graph Augmentation Stage  (Optional) 
+            await self.entities_vdb.build_index(await self.graph.nodes_data(),node_metadata, False)
+            self.time_manager.end_named_phase("entities_vdb_building")
+
+        # Graph Augmentation Stage  (Optional)
         # For HippoRAG and MedicalRAG, similarities between entities are utilized to create additional edges.
         # These edges represent similarity types and are leveraged in subsequent processes.
 
         if self.config.enable_graph_augmentation:
-
+            self.time_manager.start_named_phase("graph_augmentation")
             await self.graph.augment_graph_by_similarity_search(self.entities_vdb)
+            self.time_manager.end_named_phase("graph_augmentation")
 
         if self.config.use_entity_link_chunk:
+            self.time_manager.start_named_phase("e2r_r2c_mapping")
             await self.build_e2r_r2c_maps(True)
+            self.time_manager.end_named_phase("e2r_r2c_mapping")
 
         if self.config.use_relations_vdb:
+            self.time_manager.start_named_phase("relations_vdb_building")
             edge_metadata = await self.graph.edge_metadata()
             if not edge_metadata:
                 logger.warning("No edge metadata found. Skipping relation indexing.")
                 return
             await self.relations_vdb.build_index(await self.graph.edges_data(), edge_metadata, force=False)
+            self.time_manager.end_named_phase("relations_vdb_building")
 
         if self.config.use_subgraphs_vdb:
+            self.time_manager.start_named_phase("subgraphs_vdb_building")
             subgraph_metadata = await self.graph.subgraph_metadata()
             if not subgraph_metadata:
                 logger.warning("No node metadata found. Skipping subgraph indexing.")
 
             await self.subgraphs_vdb.build_index(await self.graph.subgraphs_data(), subgraph_metadata, force=False)
+            self.time_manager.end_named_phase("subgraphs_vdb_building")
 
         if self.config.graph.use_community:
-
+            self.time_manager.start_named_phase("community_clustering")
             await self.community.cluster(largest_cc=await self.graph.stable_largest_cc(),
                                          max_cluster_size=self.config.graph.max_graph_cluster_size,
                                          random_seed=self.config.graph.graph_cluster_seed, force = False)
+            self.time_manager.end_named_phase("community_clustering")
 
+            self.time_manager.start_named_phase("community_report_generation")
             await self.community.generate_community_report(self.graph, False)
+            self.time_manager.end_named_phase("community_report_generation")
+
         self._update_costs_info("Index Building")
+        self.time_manager.save_stage_details("index_building")
+
+        # 保存所有阶段的计时数据到文件
+        await self._save_timing_metrics()
 
         await self._build_retriever_context()
 
@@ -289,7 +315,47 @@ class GraphRAG(ContextMixin, BaseModel):
         """
         response = await self._querier.query(query)
 
+        # 保存查询阶段的计时数据
+        await self._save_timing_metrics()
+
         return response
+
+    async def _save_timing_metrics(self):
+        """保存所有阶段的计时信息到 time_used.json"""
+        import json
+        import os
+
+        timing_data = self.time_manager.get_stage_details()
+
+        # 如果没有新的计时数据，直接返回
+        if not timing_data:
+            return
+
+        output_path = os.path.join(self.workspace.get_save_path(), "time_used.json")
+
+        # 追加模式：读取已有数据
+        existing_data = []
+        if os.path.exists(output_path):
+            try:
+                with open(output_path, 'r') as f:
+                    existing_data = json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to load existing timing data: {e}")
+                existing_data = []
+
+        # 追加新数据
+        existing_data.extend(timing_data)
+
+        # 写入文件
+        try:
+            with open(output_path, 'w') as f:
+                json.dump(existing_data, f, indent=2)
+            logger.info(f"Timing metrics saved to {output_path}")
+        except Exception as e:
+            logger.error(f"Failed to save timing metrics: {e}")
+
+        # 清空已保存的计时数据，避免重复保存
+        self.time_manager.clear_stage_details()
         
 
 

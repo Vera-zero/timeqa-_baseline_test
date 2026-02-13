@@ -57,7 +57,11 @@ class NanoVectorDBStorage(BaseVectorStorage):
             list_data = [
                 {
                     "__id__": k,
-                    **{k1: v1 for k1, v1 in v.items() if k1 in self.meta_fields},
+                    **{
+                        k1: v1
+                        for k1, v1 in v.items()
+                        if k1 in self.meta_fields or k1 == "_timing"  # 允许 _timing 字段
+                    },
                 }
                 for k, v in data.items()
             ]

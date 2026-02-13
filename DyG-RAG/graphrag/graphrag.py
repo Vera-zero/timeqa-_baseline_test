@@ -345,12 +345,13 @@ class GraphRAG:
                         )
 
                     # Automatically select the best device (CUDA if available).
+                    # Use cuda:0 explicitly to avoid device mismatch in multi-GPU environments
                     device = self.ce_device
                     if device == "auto":
                         try:
                             import torch
 
-                            device = "cuda" if torch.cuda.is_available() else "cpu"
+                            device = "cuda:0" if torch.cuda.is_available() else "cpu"
                         except ImportError:
                             device = "cpu"
 
@@ -543,19 +544,29 @@ class GraphRAG:
         return response
 
     async def dynamic_query(self, query: str, param: QueryParam):
+        # 初始化计时
+        query_times = {}
+        query_start = time.time()
+
         logger.info(f"Executing dynamic event query: {query}")
-        
+
+        # 1. 查询解析计时
+        parsing_start = time.time()
         time_constraints, entities = await self.parse_query_time_and_entities(
             query, param, self.llm_response_cache
         )
+        query_times["query_parsing"] = time.time() - parsing_start
+
         logger.info(f"Extracted time constraints: {time_constraints}")
         logger.info(f"Extracted entities: {entities}")
-        
-        topk1 = param.topk1 or 2000  
-        et_top_k = param.et_top_k or 20   
+
+        topk1 = param.topk1 or 2000
+        et_top_k = param.et_top_k or 20
         found_results = []
-        
-        
+
+        # 2. 向量检索计时
+        vector_start = time.time()
+
 
         if hasattr(self.events_vdb, 'time_weighted_query'):
             # logger.info(f"Using time_weighted_query with topk1={topk1}")
@@ -639,7 +650,11 @@ class GraphRAG:
             if regular_results:
                 found_results = regular_results
                 # logger.info(f"Found {len(found_results)} events using regular query")
-        
+
+        query_times["vector_search"] = time.time() - vector_start
+
+        # 3. 重排序计时
+        rerank_start = time.time()
         top_k_seed_events = []
         if found_results:
             logger.info(f"Starting cross-encoder filtering to select top_{et_top_k} seed events from {len(found_results)} candidates")
@@ -673,8 +688,12 @@ class GraphRAG:
         else:
             logger.info("No filtered candidates available for seed selection")
 
+        query_times["reranking"] = time.time() - rerank_start
+
         logger.info(f"Starting graph traversal from {len(top_k_seed_events)} seed events")
-        
+
+        # 4. 图遍历计时
+        traversal_start = time.time()
         seed_event_ids = []
         for result in top_k_seed_events:
             event_id = result.get('id')
@@ -701,7 +720,11 @@ class GraphRAG:
             logger.info("Graph traversal is disabled in configuration")
         else:
             logger.info("Skipping graph traversal: no valid seeds or graph not available")
-        
+
+        query_times["graph_traversal"] = time.time() - traversal_start
+
+        # 5. 上下文构建计时
+        context_start = time.time()
         final_results = []
         if graph_traversed_event_ids:
             # logger.info("Retrieving full event data for all traversed events...")
@@ -845,11 +868,29 @@ class GraphRAG:
                 )
             
             context = PROMPTS["short_answer"].format(
-                content_data=events_section, 
+                content_data=events_section,
                 response_type=param.response_type
             )
-        
+
+        query_times["context_building"] = time.time() - context_start
+
+        # 6. LLM 生成计时
+        generation_start = time.time()
         response = await self.best_model_func(context)
+        query_times["llm_generation"] = time.time() - generation_start
+
+        # 计算总时间
+        query_times["total_time"] = time.time() - query_start
+
+        # 保存查询计时到 time_used.json
+        from ._utils import save_timing_to_file
+        save_timing_to_file(
+            working_dir=self.working_dir,
+            stage="dynamic_query",
+            phase_times=query_times
+        )
+        logger.info(f"Query completed in {query_times['total_time']:.2f}s")
+
         return response
 
     async def ainsert(self, string_or_strings):
@@ -858,66 +899,178 @@ class GraphRAG:
             # ---------- data preprocessing
             if isinstance(string_or_strings, str):
                 string_or_strings = [string_or_strings]
-            # ---------- new docs
+
+            # ---------- Step 1: Process and save new docs
+            logger.info("[Step 1/3] Processing documents...")
+
+            # === 开始计时 ===
+            doc_timing = {}
+            doc_start = time.time()
+
+            # 文档哈希计算
+            hash_start = time.time()
             new_docs = {
                 compute_mdhash_id(c.strip(), prefix="doc-"): {"content": c.strip()}
                 for c in string_or_strings
             }
+            doc_timing["doc_hash_computation"] = time.time() - hash_start
+
+            # 去重检查
+            dedup_start = time.time()
             _add_doc_keys = await self.full_docs.filter_keys(list(new_docs.keys()))
             new_docs = {k: v for k, v in new_docs.items() if k in _add_doc_keys}
+            doc_timing["doc_deduplication"] = time.time() - dedup_start
+
             if not len(new_docs):
                 logger.warning(f"All docs are already in the storage")
                 await self._insert_done()
                 return
             logger.info(f"[New Docs] inserting {len(new_docs)} docs")
 
-            # ---------- chunking
-            inserting_chunks = get_chunks(
-                new_docs=new_docs,
-                chunk_func=self.chunk_func,
-                overlap_token_size=self.chunk_overlap_token_size,
-                max_token_size=self.chunk_token_size,
-            )
-
-            _add_chunk_keys = await self.text_chunks.filter_keys(
-                list(inserting_chunks.keys())
-            )
-            inserting_chunks = {
-                k: v for k, v in inserting_chunks.items() if k in _add_chunk_keys
-            }
-            if not len(inserting_chunks):
-                logger.warning(f"All chunks are already in the storage")
-                await self._insert_done()
-                return
-            logger.info(f"[New Chunks] inserting {len(inserting_chunks)} chunks")
-
-            # ---------- event extraction
-            logger.info("[Event Extraction]...")
-            maybe_new_dyg, extraction_stats = await extract_events(
-                inserting_chunks,
-                dyg_inst=self.event_dynamic_graph,
-                events_vdb = self.events_vdb,
-                global_config={**self.get_config_dict(), "events_vdb": self.events_vdb},
-                using_amazon_bedrock=self.using_amazon_bedrock,
-            )
-            self.extraction_stats = extraction_stats
-            
-            # update dynamic event graph
-            if maybe_new_dyg is not None:
-                self.event_dynamic_graph = maybe_new_dyg
-                logger.info(f"Updated dynamic event graph")
-            else:
-                logger.warning("No new events found")
-                await self._insert_done()
-                return
-            
-            torch.cuda.empty_cache()
-            time.sleep(2)
-           
-            # ---------- commit upsertings
+            # Save docs immediately
+            write_start = time.time()
             await self.full_docs.upsert(new_docs)
-            await self.text_chunks.upsert(inserting_chunks)
+            doc_timing["doc_storage_write"] = time.time() - write_start
+            doc_timing["total_time"] = time.time() - doc_start
+
+            await self.full_docs.index_done_callback()
+
+            # 保存计时数据到 time_used.json
+            from ._utils import save_timing_to_file
+            save_timing_to_file(
+                working_dir=self.working_dir,
+                stage="document_processing",
+                phase_times=doc_timing
+            )
+            logger.info(f"✓ Saved {len(new_docs)} documents (took {doc_timing['total_time']:.3f}s)")
+
+            # ---------- Step 2: Check for existing chunks or create new ones
+            logger.info("[Step 2/3] Processing text chunks...")
+
+            # === 开始计时 ===
+            chunk_timing = {}
+            chunk_start = time.time()
+
+            # Check if chunks already exist for these docs
+            chunk_check_start = time.time()
+            all_chunk_keys = await self.text_chunks.all_keys()
+            doc_ids = set(new_docs.keys())
+            existing_chunks = {}
+
+            # Look for chunks that belong to our new docs
+            for chunk_key in all_chunk_keys:
+                chunk_data = await self.text_chunks.get_by_id(chunk_key)
+                if chunk_data and chunk_data.get("full_doc_id") in doc_ids:
+                    existing_chunks[chunk_key] = chunk_data
+
+            if existing_chunks:
+                logger.info(f"Found {len(existing_chunks)} existing chunks, skipping chunking")
+                inserting_chunks = existing_chunks
+                chunk_timing["chunk_check"] = time.time() - chunk_check_start
+                chunk_timing["chunk_creation"] = 0
+                chunk_timing["chunk_deduplication"] = 0
+            else:
+                chunk_timing["chunk_check"] = time.time() - chunk_check_start
+
+                # 分块创建
+                chunk_create_start = time.time()
+                inserting_chunks = get_chunks(
+                    new_docs=new_docs,
+                    chunk_func=self.chunk_func,
+                    overlap_token_size=self.chunk_overlap_token_size,
+                    max_token_size=self.chunk_token_size,
+                )
+                chunk_timing["chunk_creation"] = time.time() - chunk_create_start
+
+                # 去重检查
+                chunk_dedup_start = time.time()
+                _add_chunk_keys = await self.text_chunks.filter_keys(
+                    list(inserting_chunks.keys())
+                )
+                inserting_chunks = {
+                    k: v for k, v in inserting_chunks.items() if k in _add_chunk_keys
+                }
+                chunk_timing["chunk_deduplication"] = time.time() - chunk_dedup_start
+
+                if not len(inserting_chunks):
+                    logger.warning(f"All chunks are already in the storage")
+                    await self._insert_done()
+                    return
+                logger.info(f"[New Chunks] inserting {len(inserting_chunks)} chunks")
+
+                # Save chunks immediately
+                chunk_write_start = time.time()
+                await self.text_chunks.upsert(inserting_chunks)
+                chunk_timing["chunk_storage_write"] = time.time() - chunk_write_start
+                chunk_timing["total_time"] = time.time() - chunk_start
+
+                await self.text_chunks.index_done_callback()
+
+                # 保存计时数据到 time_used.json
+                from ._utils import save_timing_to_file
+                save_timing_to_file(
+                    working_dir=self.working_dir,
+                    stage="chunking",
+                    phase_times=chunk_timing
+                )
+                logger.info(f"✓ Saved {len(inserting_chunks)} chunks (took {chunk_timing['total_time']:.3f}s)")
+
+            # ---------- Step 3: Check for existing events or extract new ones
+            logger.info("[Step 3/3] Processing event extraction...")
+
+            # Check if events already exist in the graph
+            chunk_ids = set(inserting_chunks.keys())
+            existing_event_count = 0
+
+            # Count existing events by checking the graph
+            if hasattr(self.event_dynamic_graph, '_graph') and self.event_dynamic_graph._graph:
+                all_nodes = await self.event_dynamic_graph.get_all_nodes()
+                for node_id, node_data in all_nodes.items():
+                    source_id = node_data.get('source_id', '')
+                    if source_id:
+                        # Check if any chunk_id from our current batch is in the source_id
+                        source_ids = source_id.split(GRAPH_FIELD_SEP)
+                        if any(sid.strip() in chunk_ids for sid in source_ids):
+                            existing_event_count += 1
+
+            if existing_event_count > 0:
+                logger.info(f"Found {existing_event_count} existing events in graph, skipping event extraction")
+                # Graph and vector DB are already populated, just log stats
+                self.extraction_stats = {
+                    "total_events": existing_event_count,
+                    "skipped": True
+                }
+            else:
+                # Extract new events
+                maybe_new_dyg, extraction_stats = await extract_events(
+                    inserting_chunks,
+                    dyg_inst=self.event_dynamic_graph,
+                    events_vdb = self.events_vdb,
+                    global_config={**self.get_config_dict(), "events_vdb": self.events_vdb},
+                    using_amazon_bedrock=self.using_amazon_bedrock,
+                )
+                self.extraction_stats = extraction_stats
+
+                # update dynamic event graph
+                if maybe_new_dyg is not None:
+                    self.event_dynamic_graph = maybe_new_dyg
+                    logger.info(f"Updated dynamic event graph")
+
+                    # Save event graph and vector DB immediately
+                    await self.event_dynamic_graph.index_done_callback()
+                    await self.events_vdb.index_done_callback()
+                    logger.info(f"✓ Saved event graph and vector DB to storage")
+                else:
+                    logger.warning("No new events found")
+                    await self._insert_done()
+                    return
+
+                torch.cuda.empty_cache()
+                time.sleep(2)
+
+            logger.info("[Insert Complete] All steps finished and saved")
         finally:
+            # Final save of any remaining data (like LLM cache)
             await self._insert_done()
 
     async def _insert_start(self):
@@ -1534,8 +1687,16 @@ class GraphRAG:
         
         if cached_response:
             try:
-                parsed_data = json.loads(cached_response)
-                return parsed_data["time_constraints"], parsed_data["entities"]
+                # Extract JSON from first '{' to last '}'
+                start_idx = cached_response.find('{')
+                end_idx = cached_response.rfind('}')
+
+                if start_idx != -1 and end_idx != -1 and start_idx < end_idx:
+                    json_str = cached_response[start_idx:end_idx + 1]
+                    parsed_data = json.loads(json_str)
+                    return parsed_data["time_constraints"], parsed_data["entities"]
+                else:
+                    raise json.JSONDecodeError("No valid JSON brackets", cached_response, 0)
             except (json.JSONDecodeError, KeyError) as e:
                 logger.warning(
                     f"Invalid cache format for time constraints and entities: {e}, proceeding with extraction"
@@ -1566,18 +1727,21 @@ class GraphRAG:
         
         result = await use_model_func(te_prompt, **llm_kwargs)
         
+        # Extract JSON from first '{' to last '}'
         try:
-            parsed_data = json.loads(result)
-        except json.JSONDecodeError:
-            match = re.search(r"\{.*\}", result, re.DOTALL)
-            if not match:
-                logger.error("No JSON-like structure found in the LLM response.")
+            start_idx = result.find('{')
+            end_idx = result.rfind('}')
+
+            if start_idx == -1 or end_idx == -1 or start_idx >= end_idx:
+                logger.error("No valid JSON brackets found in LLM response for time/entity extraction.")
                 return {"start_time": None, "end_time": None}, []
-            try:
-                parsed_data = json.loads(match.group(0))
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON parsing error: {e}")
-                return {"start_time": None, "end_time": None}, []
+
+            json_str = result[start_idx:end_idx + 1]
+            parsed_data = json.loads(json_str)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error for time/entity extraction: {e}")
+            return {"start_time": None, "end_time": None}, []
+
         
         time_constraints = parsed_data.get("time_constraints", {"start_time": None, "end_time": None})
         entities = parsed_data.get("entities", [])

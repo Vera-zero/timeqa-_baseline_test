@@ -77,7 +77,7 @@ class FaissIndex(BaseIndex):
             text_embeddings = self.embedding_model._get_text_embeddings(texts)
 
   
-        vector_store = FaissVectorStore(faiss_index=faiss.IndexHNSWFlat(self.embedding_model.dimensions, 32))
+        vector_store = FaissVectorStore(faiss_index=faiss.IndexHNSWFlat(self.embedding_model._model.get_sentence_embedding_dimension(), 32))
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
         self._index =  VectorStoreIndex([], storage_context=storage_context,
@@ -132,7 +132,7 @@ class FaissIndex(BaseIndex):
     def _get_index(self):
         Settings.embed_model = self.config.embed_model
         #TODO: config the faiss index config
-        vector_store = FaissVectorStore(faiss_index=faiss.IndexHNSWFlat(1024, 32))
+        vector_store = FaissVectorStore(faiss_index=faiss.IndexHNSWFlat(self.embedding_model._model.get_sentence_embedding_dimension(), 32))
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
         return  VectorStoreIndex(

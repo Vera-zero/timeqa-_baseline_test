@@ -4,8 +4,9 @@ llm:
   model: "qwen3-32b"  # Model name (must match VLLM --served-model-name)
   api_key: "EMPTY"  # Local VLLM doesn't require real API key
   temperature: 0.0  # Deterministic output for reproducibility
-  max_token: 32768  # Maximum token limit for Qwen3-32B
+  max_token: 4096  # Maximum completion tokens (留空间给输入，模型上下文窗口为32768)
   timeout: 600  # Timeout in seconds
+  enable_thinking: false  # Set to false to disable thinking mode (for DeepSeek-R1, QwQ models)
 
 embedding:
   api_type: "hf"  # HuggingFace / SentenceTransformer
@@ -23,5 +24,5 @@ data_root:  "/workspace/ETE-Graph/dataset" # Root directory for data
 
 
 working_dir: ./ # Result directory for the experiment
-exp_name:  # Experiment name
-# 
+exp_name: "default"  # Experiment name
+#

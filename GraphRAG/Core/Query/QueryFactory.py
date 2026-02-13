@@ -22,36 +22,36 @@ class QueryFactory:
             "dalk": self._create_dalk_query,
         }
 
-    def get_query(self, name, config, retriever) -> BaseQuery:
+    def get_query(self, name, config, retriever, time_manager=None) -> BaseQuery:
         """Key is PersistType."""
-        return self.creators[name](config, retriever)
+        return self.creators[name](config, retriever, time_manager)
 
     @staticmethod
-    def _create_base_query(config, retriever):
-        return BasicQuery(config, retriever)
+    def _create_base_query(config, retriever, time_manager=None):
+        return BasicQuery(config, retriever, time_manager)
 
     @staticmethod
-    def _create_hippo_query(config, retriever):
-        return PPRQuery(config, retriever)
+    def _create_hippo_query(config, retriever, time_manager=None):
+        return PPRQuery(config, retriever, time_manager)
 
     @staticmethod
-    def _create_kgp_query(config, retriever):
-        return KGPQuery(config, retriever)
+    def _create_kgp_query(config, retriever, time_manager=None):
+        return KGPQuery(config, retriever, time_manager)
 
     @staticmethod
-    def _create_tog_query(config, retriever):
-        return ToGQuery(config, retriever)
+    def _create_tog_query(config, retriever, time_manager=None):
+        return ToGQuery(config, retriever, time_manager)
 
     @staticmethod
-    def _create_gr_query(config, retriever):
-        return GRQuery(config, retriever)
+    def _create_gr_query(config, retriever, time_manager=None):
+        return GRQuery(config, retriever, time_manager)
 
     @staticmethod
-    def _create_med_query(config, retriever):
-        return MedQuery(config, retriever)
-    
+    def _create_med_query(config, retriever, time_manager=None):
+        return MedQuery(config, retriever, time_manager)
+
     @staticmethod
-    def _create_dalk_query(config, retriever):
-        return DalkQuery(config, retriever)
+    def _create_dalk_query(config, retriever, time_manager=None):
+        return DalkQuery(config, retriever, time_manager)
 
 get_query = QueryFactory().get_query

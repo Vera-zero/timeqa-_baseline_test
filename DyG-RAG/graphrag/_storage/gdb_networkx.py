@@ -28,6 +28,16 @@ class NetworkXStorage(BaseGraphStorage):
                 graph = nx.read_graphml(file_name)
                 if graph is not None:
                     logger.info(f"Successfully loaded graph file: {file_name}")
+
+                    # 记录图元数据（新增）
+                    if hasattr(graph, 'graph') and graph.graph:
+                        if 'extraction_timing' in graph.graph:
+                            try:
+                                timing_data = json.loads(graph.graph['extraction_timing'])
+                                logger.info(f"Loaded extraction timing: total {timing_data.get('total_time', 0):.2f}s")
+                            except Exception as e:
+                                logger.debug(f"Could not parse extraction timing: {e}")
+
                     # Convert JSON strings in node attributes back to lists
                     for node, data in graph.nodes(data=True):
                         for key, value in data.items():
@@ -352,11 +362,53 @@ class NetworkXStorage(BaseGraphStorage):
     def get_graph(self):
         """
         Return the internal NetworkX graph object
-        
+
         Returns:
             NetworkX graph object
         """
         return self._graph
+
+    async def get_graph_metadata(self, key: str) -> dict:
+        """
+        获取图级别的元数据
+
+        Args:
+            key: 元数据键名（如 'extraction_timing'）
+
+        Returns:
+            元数据字典，如果不存在则返回 None
+        """
+        if hasattr(self, '_graph') and self._graph is not None:
+            metadata_str = self._graph.graph.get(key, None)
+            if metadata_str:
+                try:
+                    return json.loads(metadata_str)
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning(f"Failed to parse graph metadata '{key}': {e}")
+                    return None
+        return None
+
+    async def get_all_graph_metadata(self) -> dict:
+        """
+        获取所有图级别的元数据
+
+        Returns:
+            包含所有元数据的字典
+        """
+        if hasattr(self, '_graph') and self._graph is not None:
+            metadata = {}
+            for key, value in self._graph.graph.items():
+                if isinstance(value, str):
+                    try:
+                        # 尝试解析 JSON
+                        metadata[key] = json.loads(value)
+                    except (json.JSONDecodeError, TypeError):
+                        # 不是 JSON，保持原值
+                        metadata[key] = value
+                else:
+                    metadata[key] = value
+            return metadata
+        return {}
 
     async def _node2vec_embed(self):
         from graspologic import embed

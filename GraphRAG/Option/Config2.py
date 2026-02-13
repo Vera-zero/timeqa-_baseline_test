@@ -17,6 +17,7 @@ class WorkingParams(BaseModel):
     exp_name: str = ""
     data_root: str = ""
     dataset_name: str = ""
+    method_name: str = ""
 
 
 class Config(WorkingParams, YamlModel):
@@ -93,11 +94,20 @@ class Config(WorkingParams, YamlModel):
         opt += [Config.read_yaml(path) for path in default_config_paths]
 
         final = merge_dict(opt)
+
+        # 提取方法名称（从配置文件路径）
+        method_name = Path(_path).stem  # 从 "HippoRAG.yaml" 提取 "HippoRAG"
+        final["method_name"] = method_name
         final["dataset_name"] = dataset_name
+
         # Allow command-line data_root to override config file
         if data_root is not None:
             final["data_root"] = data_root
-        final["working_dir"] = os.path.join(final["working_dir"], dataset_name)
+
+        # 构建新的统一路径结构
+        base_dir = "/workspace/ETE-Graph/QA-result"
+        final["working_dir"] = os.path.join(base_dir, dataset_name, method_name)
+
         return Config(**final)
     
     @classmethod

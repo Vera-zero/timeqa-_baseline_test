@@ -128,6 +128,12 @@ class OpenAILLM(BaseLLM):
             kwargs.pop("max_tokens")
         if max_tokens != None:
             kwargs["max_tokens"] = max_tokens
+
+        # Support for thinking mode (like DeepSeek-R1, QwQ models)
+        # For vLLM-deployed models, enable_thinking is passed via extra_body
+        if hasattr(self.config, 'enable_thinking'):
+            kwargs["extra_body"] = {"enable_thinking": self.config.enable_thinking}
+
         if extra_kwargs:
             kwargs.update(extra_kwargs)
         return kwargs

@@ -9,24 +9,47 @@ from Core.Common.Logger import logger
 
 
 class BaseQuery(ABC):
-    def __init__(self, config, retriever_context):
+    def __init__(self, config, retriever_context, time_manager=None):
         self._retriever = MixRetriever(retriever_context)
         self.config = config
         self.llm = self._retriever.llm
+        self.time_manager = time_manager
 
     @abstractmethod
     async def _retrieve_relevant_contexts(self, **kwargs):
         pass
 
     async def query(self, query):
+        # 启动查询阶段
+        if self.time_manager:
+            self.time_manager.start_stage("dynamic_query")
+            self.time_manager.start_named_phase("query_parsing")
+
         context = await self._retrieve_relevant_contexts(query=query)
+
+        if self.time_manager:
+            self.time_manager.end_named_phase("query_parsing")
+            self.time_manager.start_named_phase("context_building")
+
+        # Context building is implicit in the response generation
         response = None
         if self.config.query_type == "summary":
+            if self.time_manager:
+                self.time_manager.end_named_phase("context_building")
+                self.time_manager.start_named_phase("llm_generation")
             response = await self.generation_summary(query, context)
         elif self.config.query_type == "qa":
+            if self.time_manager:
+                self.time_manager.end_named_phase("context_building")
+                self.time_manager.start_named_phase("llm_generation")
             response = await self.generation_qa(query, context)
         else:
             logger.error("Invalid query type")
+
+        if self.time_manager:
+            self.time_manager.end_named_phase("llm_generation")
+            self.time_manager.save_stage_details("dynamic_query")
+
         return response
 
     @abstractmethod

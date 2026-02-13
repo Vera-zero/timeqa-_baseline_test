@@ -8,11 +8,12 @@ from typing import List, Union
 
 
 class DocChunk:
-    def __init__(self, config, token_model, namesapce):
+    def __init__(self, config, token_model, namesapce, time_manager=None):
         self.config = config
         self.chunk_method = create_chunk_method(self.config.chunk_method)
         self._chunk = ChunkKVStorage(namespace=namesapce)
         self.token_model = token_model
+        self.time_manager = time_manager
 
     @property
     def namespace(self):
@@ -70,7 +71,11 @@ class DocChunk:
                 chunk["chunk_id"] = mdhash_id(chunk["content"], prefix="chunk-")
                 await self._chunk.upsert(chunk["chunk_id"], TextChunk(**chunk))
 
+            if self.time_manager:
+                self.time_manager.start_named_phase("chunk_storage_write")
             await self._chunk.persist()
+            if self.time_manager:
+                self.time_manager.end_named_phase("chunk_storage_write")
         logger.info("✅ Finished the chunking stage")
 
     async def _load_chunk(self, force=False):

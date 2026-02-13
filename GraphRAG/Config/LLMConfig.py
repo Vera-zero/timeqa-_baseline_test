@@ -84,6 +84,9 @@ class LLMConfig(YamlModel):
     # For Messages Control
     use_system_prompt: bool = True
 
+    # For Thinking Mode (like DeepSeek-R1, QwQ models)
+    enable_thinking: bool = False  # Set to False to disable thinking mode
+
     @field_validator("api_key")
     @classmethod
     def check_llm_key(cls, v):

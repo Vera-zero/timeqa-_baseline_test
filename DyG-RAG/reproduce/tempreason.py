@@ -133,11 +133,15 @@ class EmbeddingFunc:
 def get_qwen_embedding_func() -> EmbeddingFunc:
     gpu_count = torch.cuda.device_count()
     using_cuda = gpu_count > 0
-    device = "cuda" if using_cuda else "cpu"
+    # Use cuda:0 explicitly to avoid device mismatch issues with multi-GPU
+    device = "cuda:0" if using_cuda else "cpu"
 
+    # Always use single device to prevent tensor device mismatch
+    # When device_map="auto", tensors can end up on different GPUs (cuda:0, cuda:1)
+    # causing "Expected all tensors to be on the same device" errors
     model_kwargs = {}
     if gpu_count > 1:
-        model_kwargs = {"device_map": "auto", "torch_dtype": torch.float16}
+        model_kwargs = {"torch_dtype": torch.float16}
 
     st_model = SentenceTransformer(
         LOCAL_QWEN_EMBEDDING_PATH,
