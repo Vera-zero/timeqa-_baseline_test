@@ -1,0 +1,34 @@
+2026-02-13 13:55:17.225 | INFO     | Core.Chunk.DocChunk:build_chunks:29 - Starting chunk the given documents
+2026-02-13 13:55:17.233 | INFO     | Core.Storage.ChunkKVStorage:_persist:105 - Writing data into /workspace/ETE-Graph/workdir/timeqa/HippoRAG/chunk_storage_chunk_data_idx.pkl and /workspace/ETE-Graph/workdir/timeqa/HippoRAG/chunk_storage_chunk_data_key.pkl
+2026-02-13 13:55:17.233 | INFO     | Core.Chunk.DocChunk:build_chunks:80 - ✅ Finished the chunking stage
+2026-02-13 13:55:17.233 | INFO     | Core.GraphRAG:_update_costs_info:206 - Chunking stage cost: Total prompt token: 0, Total completeion token: 0, Total cost: 0
+2026-02-13 13:55:17.234 | INFO     | Core.GraphRAG:_update_costs_info:208 - Chunking time(s): 0.01
+2026-02-13 13:55:17.234 | INFO     | Core.Graph.BaseGraph:build_graph:43 - Starting build graph for the given documents
+2026-02-13 13:55:17.234 | INFO     | Core.Storage.NetworkXStorage:load_nx_graph:27 - Attempting to load the graph from: /workspace/ETE-Graph/workdir/timeqa/HippoRAG/graph_storage_nx_data.graphml
+2026-02-13 13:55:17.243 | INFO     | Core.Storage.NetworkXStorage:load_nx_graph:31 - Successfully loaded graph from: /workspace/ETE-Graph/workdir/timeqa/HippoRAG/graph_storage_nx_data.graphml with 189 nodes and 150 edges
+2026-02-13 13:55:17.243 | INFO     | Core.Graph.BaseGraph:build_graph:56 - ✅ Finished the graph building stage
+2026-02-13 13:55:17.243 | INFO     | Core.GraphRAG:_update_costs_info:206 - Build Graph stage cost: Total prompt token: 0, Total completeion token: 0, Total cost: 0
+2026-02-13 13:55:17.243 | INFO     | Core.GraphRAG:_update_costs_info:208 - Build Graph time(s): 0.01
+2026-02-13 13:55:17.245 | INFO     | Core.Index.BaseIndex:build_index:13 - Starting insert elements of the given graph into vector database
+2026-02-13 13:55:17.245 | INFO     | Core.Index.BaseIndex:build_index:17 - Loading index from the file /workspace/ETE-Graph/workdir/timeqa/HippoRAG/entities_vdb
+2026-02-13 13:55:17.255 | INFO     | Core.Index.BaseIndex:build_index:29 - ✅ Finished starting insert entities of the given graph into vector database
+2026-02-13 13:55:17.255 | INFO     | Core.Graph.BaseGraph:augment_graph_by_similarity_search:182 - Starting augment the existing graph with similariy edges
+2026-02-13 13:55:39.734 | INFO     | Core.Graph.BaseGraph:augment_graph_by_similarity_search:229 - Augmenting graph with 281 edges
+2026-02-13 13:55:39.745 | INFO     | Core.Graph.BaseGraph:augment_graph_by_similarity_search:233 - ✅ Finished augment the existing graph with similariy edges
+2026-02-13 13:55:39.747 | INFO     | Core.GraphRAG:build_e2r_r2c_maps:194 - Starting build two maps: 1️⃣ entity <-> relationship; 2️⃣ relationship <-> chunks 
+2026-02-13 13:55:39.747 | INFO     | Core.Storage.PickleBlobStorage:load:21 - Forcing rebuild the mapping for: /workspace/ETE-Graph/workdir/timeqa/HippoRAG/map_e2r_blob_data.pkl.
+2026-02-13 13:55:39.755 | INFO     | Core.Storage.PickleBlobStorage:persist:50 - Saving blob storage '/workspace/ETE-Graph/workdir/timeqa/HippoRAG/map_e2r_blob_data.pkl'.
+2026-02-13 13:55:39.756 | INFO     | Core.Storage.PickleBlobStorage:load:21 - Forcing rebuild the mapping for: /workspace/ETE-Graph/workdir/timeqa/HippoRAG/map_r2c_blob_data.pkl.
+2026-02-13 13:55:39.761 | INFO     | Core.Storage.PickleBlobStorage:persist:50 - Saving blob storage '/workspace/ETE-Graph/workdir/timeqa/HippoRAG/map_r2c_blob_data.pkl'.
+2026-02-13 13:55:39.761 | INFO     | Core.GraphRAG:build_e2r_r2c_maps:201 - ✅ Finished building the two maps 
+2026-02-13 13:55:39.762 | INFO     | Core.GraphRAG:_update_costs_info:206 - Index Building stage cost: Total prompt token: 0, Total completeion token: 0, Total cost: 0
+2026-02-13 13:55:39.762 | INFO     | Core.GraphRAG:_update_costs_info:208 - Index Building time(s): 22.52
+2026-02-13 13:55:39.762 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 13:55:39.762 | INFO     | Core.GraphRAG:_build_retriever_context:177 - Building retriever context for the current execution
+2026-02-13 13:55:56.475 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 223, completion_tokens: 338
+2026-02-13 13:55:56.843 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 13:56:15.509 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3008, completion_tokens: 351
+2026-02-13 13:56:41.112 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5837, completion_tokens: 460
+2026-02-13 13:56:41.113 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 13:56:54.647 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 223, completion_tokens: 267
+2026-02-13 13:56:55.017 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2

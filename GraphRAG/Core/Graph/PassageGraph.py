@@ -32,8 +32,8 @@ class PassageGraph(BaseGraph):
     1. The original code implementation on GitHub: https://github.com/YuWVandy/KG-LLM-MDQA
     2. The associated research paper: https://arxiv.org/abs/2308.11730
     """
-    def __init__(self, config, llm, encoder):
-        super().__init__(config, llm, encoder)
+    def __init__(self, config, llm, encoder, time_manager=None):
+        super().__init__(config, llm, encoder, time_manager)
         self.k: int = 30
         self.k_nei: int = 3
         self._graph = NetworkXStorage()

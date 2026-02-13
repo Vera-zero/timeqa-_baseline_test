@@ -1,0 +1,107 @@
+2026-02-13 14:22:03.175 | INFO     | Core.Chunk.DocChunk:build_chunks:29 - Starting chunk the given documents
+2026-02-13 14:22:03.184 | INFO     | Core.Storage.ChunkKVStorage:_persist:105 - Writing data into /workspace/ETE-Graph/workdir/timeqa/HippoRAG/chunk_storage_chunk_data_idx.pkl and /workspace/ETE-Graph/workdir/timeqa/HippoRAG/chunk_storage_chunk_data_key.pkl
+2026-02-13 14:22:03.185 | INFO     | Core.Chunk.DocChunk:build_chunks:80 - ✅ Finished the chunking stage
+2026-02-13 14:22:03.185 | INFO     | Core.GraphRAG:_update_costs_info:206 - Chunking stage cost: Total prompt token: 0, Total completeion token: 0, Total cost: 0
+2026-02-13 14:22:03.185 | INFO     | Core.GraphRAG:_update_costs_info:208 - Chunking time(s): 0.01
+2026-02-13 14:22:03.185 | INFO     | Core.Graph.BaseGraph:build_graph:43 - Starting build graph for the given documents
+2026-02-13 14:22:03.185 | INFO     | Core.Storage.NetworkXStorage:load_nx_graph:27 - Attempting to load the graph from: /workspace/ETE-Graph/workdir/timeqa/HippoRAG/graph_storage_nx_data.graphml
+2026-02-13 14:22:03.193 | INFO     | Core.Storage.NetworkXStorage:load_nx_graph:31 - Successfully loaded graph from: /workspace/ETE-Graph/workdir/timeqa/HippoRAG/graph_storage_nx_data.graphml with 189 nodes and 150 edges
+2026-02-13 14:22:03.194 | INFO     | Core.Graph.BaseGraph:build_graph:56 - ✅ Finished the graph building stage
+2026-02-13 14:22:03.194 | INFO     | Core.GraphRAG:_update_costs_info:206 - Build Graph stage cost: Total prompt token: 0, Total completeion token: 0, Total cost: 0
+2026-02-13 14:22:03.194 | INFO     | Core.GraphRAG:_update_costs_info:208 - Build Graph time(s): 0.01
+2026-02-13 14:22:03.196 | INFO     | Core.Index.BaseIndex:build_index:13 - Starting insert elements of the given graph into vector database
+2026-02-13 14:22:03.196 | INFO     | Core.Index.BaseIndex:build_index:17 - Loading index from the file /workspace/ETE-Graph/workdir/timeqa/HippoRAG/entities_vdb
+2026-02-13 14:22:03.206 | INFO     | Core.Index.BaseIndex:build_index:29 - ✅ Finished starting insert entities of the given graph into vector database
+2026-02-13 14:22:03.206 | INFO     | Core.Graph.BaseGraph:augment_graph_by_similarity_search:182 - Starting augment the existing graph with similariy edges
+2026-02-13 14:22:20.604 | INFO     | Core.Graph.BaseGraph:augment_graph_by_similarity_search:229 - Augmenting graph with 281 edges
+2026-02-13 14:22:20.614 | INFO     | Core.Graph.BaseGraph:augment_graph_by_similarity_search:233 - ✅ Finished augment the existing graph with similariy edges
+2026-02-13 14:22:20.616 | INFO     | Core.GraphRAG:build_e2r_r2c_maps:194 - Starting build two maps: 1️⃣ entity <-> relationship; 2️⃣ relationship <-> chunks 
+2026-02-13 14:22:20.616 | INFO     | Core.Storage.PickleBlobStorage:load:21 - Forcing rebuild the mapping for: /workspace/ETE-Graph/workdir/timeqa/HippoRAG/map_e2r_blob_data.pkl.
+2026-02-13 14:22:20.625 | INFO     | Core.Storage.PickleBlobStorage:persist:50 - Saving blob storage '/workspace/ETE-Graph/workdir/timeqa/HippoRAG/map_e2r_blob_data.pkl'.
+2026-02-13 14:22:20.625 | INFO     | Core.Storage.PickleBlobStorage:load:21 - Forcing rebuild the mapping for: /workspace/ETE-Graph/workdir/timeqa/HippoRAG/map_r2c_blob_data.pkl.
+2026-02-13 14:22:20.630 | INFO     | Core.Storage.PickleBlobStorage:persist:50 - Saving blob storage '/workspace/ETE-Graph/workdir/timeqa/HippoRAG/map_r2c_blob_data.pkl'.
+2026-02-13 14:22:20.631 | INFO     | Core.GraphRAG:build_e2r_r2c_maps:201 - ✅ Finished building the two maps 
+2026-02-13 14:22:20.631 | INFO     | Core.GraphRAG:_update_costs_info:206 - Index Building stage cost: Total prompt token: 0, Total completeion token: 0, Total cost: 0
+2026-02-13 14:22:20.631 | INFO     | Core.GraphRAG:_update_costs_info:208 - Index Building time(s): 17.44
+2026-02-13 14:22:20.631 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:22:20.631 | INFO     | Core.GraphRAG:_build_retriever_context:177 - Building retriever context for the current execution
+2026-02-13 14:22:22.245 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 227, completion_tokens: 31
+2026-02-13 14:22:22.623 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:22:25.793 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3012, completion_tokens: 62
+2026-02-13 14:22:32.136 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5841, completion_tokens: 120
+2026-02-13 14:22:32.138 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:22:34.141 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 227, completion_tokens: 31
+2026-02-13 14:22:34.516 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:22:40.528 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3012, completion_tokens: 119
+2026-02-13 14:22:49.047 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5841, completion_tokens: 132
+2026-02-13 14:22:49.048 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:22:50.715 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 220, completion_tokens: 23
+2026-02-13 14:22:50.845 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:22:56.572 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3005, completion_tokens: 114
+2026-02-13 14:23:09.456 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5827, completion_tokens: 225
+2026-02-13 14:23:09.457 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:23:11.535 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 227, completion_tokens: 31
+2026-02-13 14:23:11.935 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:23:15.811 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3012, completion_tokens: 76
+2026-02-13 14:23:20.791 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5841, completion_tokens: 74
+2026-02-13 14:23:20.794 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:23:22.397 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 220, completion_tokens: 23
+2026-02-13 14:23:22.664 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:23:27.894 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3005, completion_tokens: 103
+2026-02-13 14:23:31.767 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5827, completion_tokens: 52
+2026-02-13 14:23:31.775 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:23:33.593 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 225, completion_tokens: 27
+2026-02-13 14:23:33.977 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:23:36.792 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3010, completion_tokens: 55
+2026-02-13 14:23:39.592 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5837, completion_tokens: 30
+2026-02-13 14:23:39.593 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:23:41.476 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 227, completion_tokens: 27
+2026-02-13 14:23:41.844 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:23:46.228 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3012, completion_tokens: 86
+2026-02-13 14:23:51.188 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5841, completion_tokens: 73
+2026-02-13 14:23:51.189 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:23:53.022 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 224, completion_tokens: 27
+2026-02-13 14:23:53.399 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:23:56.421 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3009, completion_tokens: 59
+2026-02-13 14:23:59.386 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5835, completion_tokens: 30
+2026-02-13 14:23:59.387 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:24:01.239 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 227, completion_tokens: 27
+2026-02-13 14:24:01.623 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:24:03.326 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3012, completion_tokens: 33
+2026-02-13 14:24:07.961 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5841, completion_tokens: 63
+2026-02-13 14:24:07.962 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:24:09.763 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 227, completion_tokens: 27
+2026-02-13 14:24:10.137 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:24:14.656 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3012, completion_tokens: 89
+2026-02-13 14:24:20.505 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5841, completion_tokens: 84
+2026-02-13 14:24:20.506 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:24:22.417 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 226, completion_tokens: 30
+2026-02-13 14:24:22.630 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:24:28.287 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3011, completion_tokens: 90
+2026-02-13 14:24:34.260 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5839, completion_tokens: 71
+2026-02-13 14:24:34.261 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:24:36.172 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 226, completion_tokens: 30
+2026-02-13 14:24:36.584 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:24:42.173 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3011, completion_tokens: 97
+2026-02-13 14:24:47.732 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5839, completion_tokens: 66
+2026-02-13 14:24:47.734 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:24:49.751 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 226, completion_tokens: 30
+2026-02-13 14:24:50.135 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:24:56.208 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3011, completion_tokens: 120
+2026-02-13 14:25:02.032 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5839, completion_tokens: 90
+2026-02-13 14:25:02.033 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:25:03.803 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 224, completion_tokens: 26
+2026-02-13 14:25:04.178 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:25:05.707 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3009, completion_tokens: 29
+2026-02-13 14:25:08.600 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5835, completion_tokens: 29
+2026-02-13 14:25:08.602 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:25:10.458 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 225, completion_tokens: 28
+2026-02-13 14:25:10.842 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:25:14.910 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3010, completion_tokens: 80
+2026-02-13 14:25:19.466 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5837, completion_tokens: 65
+2026-02-13 14:25:19.467 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json
+2026-02-13 14:25:21.377 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 225, completion_tokens: 28
+2026-02-13 14:25:21.768 | INFO     | Core.Query.PPRQuery:_retrieve_relevant_contexts:56 - Entering the ir-cot iteration: 2
+2026-02-13 14:25:25.639 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 3010, completion_tokens: 76
+2026-02-13 14:25:29.054 | INFO     | Core.Common.CostManager:update_cost:136 - prompt_tokens: 5837, completion_tokens: 42
+2026-02-13 14:25:29.055 | INFO     | Core.GraphRAG:_save_timing_metrics:353 - Timing metrics saved to /workspace/ETE-Graph/workdir/timeqa/HippoRAG/time_used.json

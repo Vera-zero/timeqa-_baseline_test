@@ -3,6 +3,7 @@ from Option.Config2 import Config
 import argparse
 import os
 import asyncio
+import time
 from pathlib import Path
 from shutil import copyfile
 from Data.QueryDataset import RAGQueryDataset
@@ -43,8 +44,12 @@ def wrapper_query(query_dataset, digimon, result_dir, opt):
 
     for _, i in enumerate(range(dataset_len)):
         query = query_dataset[i]
+        start_time = time.time()
         res = asyncio.run(digimon.query(query["question"]))
+        end_time = time.time()
+        query_time = end_time - start_time
         query["output"] = res
+        query["query_time"] = query_time
         all_res.append(query)
 
     all_res_df = pd.DataFrame(all_res)
@@ -71,11 +76,16 @@ def wrapper_query_filtered(filtered_questions, digimon, result_dir, opt):
         doc_id = query.get('doc_id', 'N/A')
         print(f"\n[{idx+1}/{len(filtered_questions)}] 文档{doc_id}: {query['question'][:60]}...")
 
+        start_time = time.time()
         res = asyncio.run(digimon.query(query["question"]))
+        end_time = time.time()
+        query_time = end_time - start_time
         query["output"] = res
+        query["query_time"] = query_time
         all_res.append(query)
 
         print(f"  回答: {res[:100]}...")
+        print(f"  查询耗时: {query_time:.2f}秒")
 
     all_res_df = pd.DataFrame(all_res)
     save_path = os.path.join(opt.result_dir, "results.json")  # 使用 opt.result_dir

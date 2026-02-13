@@ -15,8 +15,8 @@ from Core.Common.Utils import truncate_str_by_token_size
 
 
 class GRQuery(BaseQuery):
-    def __init__(self, config, retriever_context):
-        super().__init__(config, retriever_context)
+    def __init__(self, config, retriever_context, time_manager=None):
+        super().__init__(config, retriever_context, time_manager)
 
     async def initialization(self):
         from Core.Common.Constants import GRAPH_FIELD_SEP

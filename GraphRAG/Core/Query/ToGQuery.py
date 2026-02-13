@@ -7,8 +7,8 @@ from typing import Union
 
 
 class ToGQuery(BaseQuery):
-    def __init__(self, config, retriever_context):
-        super().__init__(config, retriever_context)
+    def __init__(self, config, retriever_context, time_manager=None):
+        super().__init__(config, retriever_context, time_manager)
 
     async def _extend_reasoning_paths_per_depth(self, query: str) -> tuple[bool, list[list[tuple]], list, list, list]:
         from collections import defaultdict

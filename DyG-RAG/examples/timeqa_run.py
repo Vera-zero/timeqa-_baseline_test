@@ -264,14 +264,19 @@ graph_func.insert(all_docs)
 results = []
 print(f"\n开始处理 {len(all_questions)} 个问题...")
 for idx, question in enumerate(tqdm(all_questions, desc="Processing questions")):
+    start_time = time.time()
     ans = graph_func.query(question, param=QueryParam(mode="dynamic"))
+    end_time = time.time()
+    query_time = end_time - start_time
     results.append({
         "question_idx": idx,
         "question": question,
-        "answer": ans
+        "answer": ans,
+        "query_time": query_time
     })
     print(f"\nQuestion {idx + 1}/{len(all_questions)}: {question}")
-    print(f"Answer: {ans}\n")
+    print(f"Answer: {ans}")
+    print(f"Query time: {query_time:.2f}s\n")
 
 # Save results to JSON
 output_file = RESULT_DIR / "results.json"

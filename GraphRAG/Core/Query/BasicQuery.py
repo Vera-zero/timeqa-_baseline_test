@@ -6,8 +6,8 @@ from Core.Prompt import QueryPrompt
 
 
 class BasicQuery(BaseQuery):
-    def __init__(self, config, retriever_context):
-        super().__init__(config, retriever_context)
+    def __init__(self, config, retriever_context, time_manager=None):
+        super().__init__(config, retriever_context, time_manager)
 
     async def _retrieve_relevant_contexts(self, query):
 

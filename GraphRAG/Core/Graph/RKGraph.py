@@ -27,8 +27,8 @@ from Core.Storage.NetworkXStorage import NetworkXStorage
 
 class RKGraph(BaseGraph):
 
-    def __init__(self, config, llm, encoder):
-        super().__init__(config, llm, encoder)
+    def __init__(self, config, llm, encoder, time_manager=None):
+        super().__init__(config, llm, encoder, time_manager)
         self._graph = NetworkXStorage()
 
     @classmethod

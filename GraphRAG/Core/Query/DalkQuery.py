@@ -5,8 +5,8 @@ from Core.Prompt import QueryPrompt
 from Core.Prompt.QueryPrompt import DALK_RERANK_PROMPT, DALK_CONVERT_PROMPT, DALK_STEP_PROMPT, DALK_CONTEXT_PROMPT, DALK_QUERY_PROMPT
 
 class DalkQuery(BaseQuery):
-    def __init__(self, config, retriever_context):
-        super().__init__(config, retriever_context)
+    def __init__(self, config, retriever_context, time_manager=None):
+        super().__init__(config, retriever_context, time_manager)
 
     async def _select_most_relative_paths(self, path_list, query):
         if path_list is None: return ""

@@ -8,8 +8,8 @@ from Core.Schema.Message import Message
 
 
 class PPRQuery(BaseQuery):
-    def __init__(self, config, retriever_context):
-        super().__init__(config, retriever_context)
+    def __init__(self, config, retriever_context, time_manager=None):
+        super().__init__(config, retriever_context, time_manager)
 
     async def reason_step(self, few_shot: list, query: str, passages: list, thoughts: list):
         """

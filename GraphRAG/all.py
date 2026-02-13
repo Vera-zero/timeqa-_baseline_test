@@ -144,8 +144,8 @@ if __name__ == "__main__":
     # 插入前2个文档
     asyncio.run(digimon.insert(corpus))
 
-    # # 查询属于这2个文档的问题
-    # save_path = wrapper_query_filtered(filtered_questions, digimon, result_dir, opt)
+    # 查询属于这2个文档的问题
+    save_path = wrapper_query_filtered(filtered_questions, digimon, result_dir, opt)
 
     # # 评估结果
     # asyncio.run(wrapper_evaluation(save_path, opt, result_dir))

@@ -4,7 +4,7 @@ import numpy as np
 from typing import Optional, Union
 import asyncio
 
-from openai import APIConnectionError, AsyncOpenAI, AsyncStream
+from openai import APIConnectionError, AsyncOpenAI, AsyncStream, RateLimitError
 from openai._base_client import AsyncHttpxClientWrapper
 from openai.types import CompletionUsage
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
@@ -14,6 +14,7 @@ from tenacity import (
     retry_if_exception_type,
     stop_after_attempt,
     wait_random_exponential,
+    wait_exponential,
 )
 
 from Config.LLMConfig import LLMConfig, LLMType
@@ -29,6 +30,49 @@ from Core.Utils.TokenCounter import (
     count_output_tokens,
     get_max_completion_tokens,
 )
+
+
+# ============================================================================
+# Global Singleton AsyncOpenAI Client Management (DyG-RAG Style)
+# ============================================================================
+# This approach follows DyG-RAG's pattern of using global singleton clients
+# for better resource management and consistency across requests.
+# ============================================================================
+
+# Global client instances cache
+_global_clients_cache = {}
+
+
+def get_openai_async_client_instance(base_url: str, api_key: str, proxy_params: dict = None):
+    """
+    Get or create a global AsyncOpenAI client instance for the given configuration.
+
+    This follows DyG-RAG's pattern of using global singleton clients to avoid
+    creating multiple client instances for the same configuration.
+
+    Args:
+        base_url: The base URL for the OpenAI API (or compatible local LLM service)
+        api_key: The API key (use "EMPTY" for local LLM services)
+        proxy_params: Optional proxy configuration
+
+    Returns:
+        AsyncOpenAI client instance
+    """
+    global _global_clients_cache
+
+    # Create a cache key based on configuration
+    cache_key = f"{base_url}_{api_key}"
+
+    if cache_key not in _global_clients_cache:
+        kwargs = {"api_key": api_key, "base_url": base_url}
+
+        # Add proxy configuration if provided
+        if proxy_params:
+            kwargs["http_client"] = AsyncHttpxClientWrapper(**proxy_params)
+
+        _global_clients_cache[cache_key] = AsyncOpenAI(**kwargs)
+
+    return _global_clients_cache[cache_key]
 
 
 @register_provider(
@@ -48,11 +92,24 @@ class OpenAILLM(BaseLLM):
         self.cost_manager: Optional[CostManager] = None
         self.semaphore = asyncio.Semaphore(config.max_concurrent)
     def _init_client(self):
-        """https://github.com/openai/openai-python#async-usage"""
+        """
+        Initialize AsyncOpenAI client using global singleton pattern (DyG-RAG style).
+
+        This follows DyG-RAG's approach of using global singleton clients for better
+        resource management and to ensure consistent client instances across requests.
+        """
         self.model = self.config.model  # Used in _calc_usage & _cons_kwargs
         self.pricing_plan = self.config.pricing_plan or self.model
-        kwargs = self._make_client_kwargs()
-        self.aclient = AsyncOpenAI(**kwargs)
+
+        # Get proxy parameters if configured
+        proxy_params = self._get_proxy_params()
+
+        # Use global singleton client (DyG-RAG pattern)
+        self.aclient = get_openai_async_client_instance(
+            base_url=self.config.base_url,
+            api_key=self.config.api_key,
+            proxy_params=proxy_params if proxy_params else None
+        )
 
     def _make_client_kwargs(self) -> dict:
         kwargs = {"api_key": self.config.api_key, "base_url": self.config.base_url}
@@ -129,10 +186,13 @@ class OpenAILLM(BaseLLM):
         if max_tokens != None:
             kwargs["max_tokens"] = max_tokens
 
-        # Support for thinking mode (like DeepSeek-R1, QwQ models)
+        # Support for thinking mode (DyG-RAG style)
         # For vLLM-deployed models, enable_thinking is passed via extra_body
+        # Using chat_template_kwargs format for consistency with DyG-RAG
         if hasattr(self.config, 'enable_thinking'):
-            kwargs["extra_body"] = {"enable_thinking": self.config.enable_thinking}
+            kwargs["extra_body"] = {
+                "chat_template_kwargs": {"enable_thinking": self.config.enable_thinking}
+            }
 
         if extra_kwargs:
             kwargs.update(extra_kwargs)
@@ -149,14 +209,29 @@ class OpenAILLM(BaseLLM):
         return await self._achat_completion(messages, timeout=self.get_timeout(timeout))
 
     @retry(
-        wait=wait_random_exponential(min=1, max=60),
-        stop=stop_after_attempt(6),
-        after=after_log(logger, logger.level("WARNING").name),
-        retry=retry_if_exception_type(Exception),
-        retry_error_callback=log_and_reraise,
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=retry_if_exception_type((RateLimitError, APIConnectionError)),
     )
     async def acompletion_text(self, messages: list[dict], stream=False, timeout=USE_CONFIG_TIMEOUT, max_tokens = None, format = "text") -> str:
-        """when streaming, print each token in place."""
+        """
+        Asynchronous text completion with retry mechanism (DyG-RAG style).
+
+        This follows DyG-RAG's retry configuration:
+        - Max 5 attempts
+        - Exponential backoff: multiplier=1, min=4s, max=10s
+        - Retry on RateLimitError and APIConnectionError
+
+        Args:
+            messages: List of message dictionaries
+            stream: Whether to stream the response
+            timeout: Request timeout in seconds
+            max_tokens: Maximum tokens to generate
+            format: Output format ("text" or "json")
+
+        Returns:
+            Generated text response
+        """
         if stream:
             return await self._achat_completion_stream(messages, timeout=timeout, max_tokens = max_tokens)
 

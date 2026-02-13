@@ -23,8 +23,8 @@ from sklearn.mixture import GaussianMixture
 class TreeGraph(BaseGraph):
     max_workers: int = 16
     leaf_workers: int = 32
-    def __init__(self, config, llm, encoder):
-        super().__init__(config, llm, encoder)
+    def __init__(self, config, llm, encoder, time_manager=None):
+        super().__init__(config, llm, encoder, time_manager)
         self._graph: TreeGraphStorage = TreeGraphStorage()  # Tree index
         self.embedding_model = get_rag_embedding(config.embedding.api_type, config)  # Embedding model
         self.config = config.graph # Only keep the graph config
