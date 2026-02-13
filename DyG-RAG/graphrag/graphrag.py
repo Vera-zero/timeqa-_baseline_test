@@ -143,7 +143,7 @@ class GraphRAG:
 
     # --- Model Configuration ---
     # A central place for all our AI models.
-    model_path: str = "./models"
+    model_path: str = "/workspace/models"
 
     # NER model parameters
     ner_model_name: str = "dslim_bert_base_ner"  # NER model name (will be combined with model_path)

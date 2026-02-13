@@ -62,9 +62,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-opt", type=str, help="Path to option YMAL file.")
     parser.add_argument("-dataset_name", type=str, help="Name of the dataset.")
+    parser.add_argument("-data_root", type=str, default=None,
+                        help="Root directory for datasets (overrides config file).")
     args = parser.parse_args()
 
-    opt = Config.parse(Path(args.opt), dataset_name=args.dataset_name)
+    opt = Config.parse(Path(args.opt), dataset_name=args.dataset_name, data_root=args.data_root)
     digimon = GraphRAG(config=opt)
     result_dir = check_dirs(opt)
 

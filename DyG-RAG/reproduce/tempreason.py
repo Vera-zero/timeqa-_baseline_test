@@ -223,7 +223,7 @@ graph_rag = GraphRAG(
     enable_llm_cache=True,
     best_model_max_token_size = 16384,
     cheap_model_max_token_size = 16384,
-    model_path="./models",  
+    model_path="/workspace/models",
     ce_model="cross-encoder/ms-marco-TinyBERT-L-2-v2",  
     ner_model_name="dslim_bert_base_ner", 
 )

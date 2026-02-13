@@ -76,8 +76,14 @@ class Config(WorkingParams, YamlModel):
         return Config(**opt)
 
     @classmethod
-    def parse(cls, _path, dataset_name):
-        """Parse config from yaml file"""
+    def parse(cls, _path, dataset_name, data_root=None):
+        """Parse config from yaml file
+
+        Args:
+            _path: Path to method-specific config yaml
+            dataset_name: Name of the dataset
+            data_root: Optional data root directory (overrides config file)
+        """
         opt = [parse(_path)]
 
         default_config_paths: List[Path] = [
@@ -85,9 +91,12 @@ class Config(WorkingParams, YamlModel):
             CONFIG_ROOT / "Config2.yaml",
         ]
         opt += [Config.read_yaml(path) for path in default_config_paths]
-    
+
         final = merge_dict(opt)
         final["dataset_name"] = dataset_name
+        # Allow command-line data_root to override config file
+        if data_root is not None:
+            final["data_root"] = data_root
         final["working_dir"] = os.path.join(final["working_dir"], dataset_name)
         return Config(**final)
     

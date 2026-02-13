@@ -20,9 +20,14 @@ from graphrag import GraphRAG, QueryParam
 from graphrag.base import BaseKVStorage
 from graphrag._utils import compute_args_hash, logger
 
-WORK_DIR = Path("work_dir")
+from graphrag import GraphRAG, QueryParam
+import json
+from tqdm import tqdm
+from pathlib import Path
+
+WORK_DIR = Path("/workspace/ETE-Graph/QA-result/tempreason/DyG-RAG")
 WORK_DIR.mkdir(exist_ok=True)
-CORPUS_FILE = Path("demo/Corpus.json")
+CORPUS_FILE = Path("/workspace/ETE-Graph/dataset/tempreason/test_l3_processed.json")
 
 from graphrag._utils import compute_args_hash, logger
 
@@ -31,6 +36,26 @@ tiktoken.get_encoding("cl100k_base")
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("DyG-RAG").setLevel(logging.INFO)
+
+################################################################################
+# 0. Configuration
+################################################################################
+def get_config_value(env_name: str, description: str, example: str = None) -> str:
+    """Get configuration value from environment variable or user input."""
+    value = os.getenv(env_name)
+    if value:
+        return value
+    
+    print(f"\n⚠️  Missing configuration: {env_name}")
+    print(f"Description: {description}")
+    if example:
+        print(f"Example: {example}")
+    
+    while True:
+        user_input = input(f"Please enter {env_name}: ").strip()
+        if user_input:
+            return user_input
+        print("❌ Value cannot be empty. Please try again.")
 
 ################################################################################
 # VLLM Service Configuration
@@ -47,23 +72,6 @@ logging.getLogger("DyG-RAG").setLevel(logging.INFO)
 # Then verify the service is running:
 # curl http://localhost:8000/v1/models
 ################################################################################
-
-def get_config_value(env_name: str, description: str, example: str = None) -> str:
-    """Get configuration value from environment variable or user input."""
-    value = os.getenv(env_name)
-    if value:
-        return value
-
-    print(f"\n⚠️  Missing configuration: {env_name}")
-    print(f"Description: {description}")
-    if example:
-        print(f"Example: {example}")
-
-    while True:
-        user_input = input(f"Please enter {env_name}: ").strip()
-        if user_input:
-            return user_input
-        print("❌ Value cannot be empty. Please try again.")
 
 print("🔧 Checking configuration...")
 VLLM_BASE_URL = get_config_value(
@@ -107,13 +115,13 @@ class EmbeddingFunc:
             return await loop.run_in_executor(None, encode)
         else:
             return encode()
-
+    
     # Make the model not serializable for GraphRAG initialization
     def __getstate__(self):
         state = self.__dict__.copy()
         state['model'] = None
         return state
-
+    
     # Restore model reference during deserialization (will be None, but structure preserved)
     def __setstate__(self, state):
         self.__dict__.update(state)
@@ -139,9 +147,9 @@ def get_qwen_embedding_func() -> EmbeddingFunc:
         max_token_size=32768,        # Qwen-Embedding-8B supports 32k context
         model=st_model,
     )
-
+    
 ################################################################################
-# LLM call function (with cache)
+# 2. LLM call function (with cache)
 ################################################################################
 
 def _build_async_client() -> AsyncOpenAI:
@@ -149,6 +157,12 @@ def _build_async_client() -> AsyncOpenAI:
 
 async def _chat_completion(model: str, messages: list[dict[str, str]], **kwargs) -> str:
     client = _build_async_client()
+
+    # 为 Qwen3-32B 默认禁用思考功能
+    extra_body = kwargs.pop("extra_body", {})
+    extra_body["chat_template_kwargs"] = {"enable_thinking": False}
+    kwargs["extra_body"] = extra_body
+
     response = await client.chat.completions.create(model=model, messages=messages, **kwargs)
     return response.choices[0].message.content
 
@@ -193,8 +207,7 @@ async def best_model_func(prompt: str, system_prompt: str | None = None, history
 
 embedding_func = get_qwen_embedding_func()
 model_ref = embedding_func.model
-embedding_func.model = None
-
+embedding_func.model = None 
 
 def read_json_file(fp: Path):
     with fp.open(encoding="utf-8") as f:
@@ -208,25 +221,38 @@ graph_func = GraphRAG(
     enable_llm_cache=True,
     best_model_max_token_size = 16384,
     cheap_model_max_token_size = 16384,
-    model_path="./models",
-    ce_model="cross-encoder/ms-marco-TinyBERT-L-2-v2",
-    ner_model_name="dslim_bert_base_ner",
+    model_path="/workspace/models",
+    ce_model="cross-encoder/ms-marco-TinyBERT-L-2-v2",  
+    ner_model_name="dslim_bert_base_ner", 
 )
 
 embedding_func.model = model_ref
 
-# Read the JSON file
 corpus_data = read_json_file(CORPUS_FILE)
-total_docs = len(corpus_data)
+datas_content = corpus_data["datas"]
+total_docs = len(datas_content)
 logger.info(f"Start processing, total {total_docs} documents to process.")
 
+corpus_data = read_json_file(CORPUS_FILE)
+datas_content = corpus_data["contents"][:2]
+total_docs = len(datas_content)
+#print (f"datas:{datas_content[0]}, total_docs: {total_docs}")
 all_docs = []
-for idx, obj in enumerate(tqdm(corpus_data, desc="Loading docs", total=total_docs)):
+all_questions_list = []
+for idx, obj in enumerate(tqdm(datas_content, desc="Loading docs", total=total_docs)):
     # Combine metadata with content
-    enriched_content = f"Title: {obj['title']}\nDocument ID: {obj['doc_id']}\n\n{obj['context']}"
+    enriched_content = f"{obj['fact_context']}"
     all_docs.append(enriched_content)
+    all_questions_list.append(obj["question_list"])
 
+all_questions = []
+for idx, obj in enumerate(tqdm(all_questions_list, desc="Loading questions", total=len(all_questions_list))):
+    for idx, questions in enumerate(obj):
+        question = questions["question"]
+        all_questions.append(question)
+ 
 graph_func.insert(all_docs)
 
-print(graph_func.query("Which position did Pat Duncan hold in Feb 1996?", param=QueryParam(mode="dynamic")))
-
+for question in all_questions:
+    ans =graph_func.query(question, param=QueryParam(mode="dynamic"))
+    print(ans)

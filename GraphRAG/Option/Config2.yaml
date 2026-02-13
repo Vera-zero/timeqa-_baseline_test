@@ -18,7 +18,7 @@ embedding:
   embed_batch_size: 128  # Batch size for embedding generation
   embedding_func_max_async: 16  # Maximum async embedding requests
  
-data_root:  "YOUR_ROOT_DATA" # Root directory for data
+data_root:  "/workspace/ETE-Graph/dataset" # Root directory for data
 
 
 

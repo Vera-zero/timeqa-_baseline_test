@@ -67,7 +67,7 @@ class EventRelationshipConfig:
 @dataclass 
 class ExtractionConfig:
     """Configuration for event extraction pipeline"""
-    model_path: str = "./models"
+    model_path: str = "/workspace/models"
     ner_model_name: str = "dslim_bert_base_ner"
     ner_device: str = "cuda:0"
     ner_batch_size: int = 32
@@ -431,7 +431,7 @@ async def extract_events(
     
     # Convert legacy config to modern config objects
     config = ExtractionConfig(
-        model_path=global_config.get("model_path", "./models"),
+        model_path=global_config.get("model_path", "/workspace/models"),
         ner_model_name=global_config.get("ner_model_name", "dslim_bert_base_ner"),
         ner_device=global_config.get("ner_device", "cuda:0"),
         ner_batch_size=global_config.get("ner_batch_size", 32),

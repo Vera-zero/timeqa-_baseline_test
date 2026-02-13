@@ -25,9 +25,9 @@ import json
 from tqdm import tqdm
 from pathlib import Path
 
-WORK_DIR = Path("work_dir")
+WORK_DIR = Path("/workspace/ETE-Graph/QA-result/timeqa/DyG-RAG")
 WORK_DIR.mkdir(exist_ok=True)
-CORPUS_FILE = Path("/workspace/ETE-Graph/DyG-RAG/demo/Corpus.json")
+CORPUS_FILE = Path("/workspace/ETE-Graph/dataset/timeqa/test_processed.json")
 
 from graphrag._utils import compute_args_hash, logger
 
@@ -221,7 +221,7 @@ graph_func = GraphRAG(
     enable_llm_cache=True,
     best_model_max_token_size = 16384,
     cheap_model_max_token_size = 16384,
-    model_path="./models",  
+    model_path="/workspace/models",
     ce_model="cross-encoder/ms-marco-TinyBERT-L-2-v2",  
     ner_model_name="dslim_bert_base_ner", 
 )
@@ -229,15 +229,30 @@ graph_func = GraphRAG(
 embedding_func.model = model_ref
 
 corpus_data = read_json_file(CORPUS_FILE)
-total_docs = len(corpus_data)
+datas_content = corpus_data["datas"]
+total_docs = len(datas_content)
 logger.info(f"Start processing, total {total_docs} documents to process.")
 
+corpus_data = read_json_file(CORPUS_FILE)
+datas_content = corpus_data["datas"][:2]
+total_docs = len(datas_content)
+#print (f"datas:{datas_content[0]}, total_docs: {total_docs}")
 all_docs = []
-for idx, obj in enumerate(tqdm(corpus_data, desc="Loading docs", total=total_docs)):
+all_questions_list = []
+for idx, obj in enumerate(tqdm(datas_content, desc="Loading docs", total=total_docs)):
     # Combine metadata with content
-    enriched_content = f"Title: {obj['title']}\nDocument ID: {obj['doc_id']}\n\n{obj['context']}"
+    enriched_content = f"Title: {obj['idx']}\nDocument ID: {obj['idx']}\n\n{obj['context']}"
     all_docs.append(enriched_content)
+    all_questions_list.append(obj["questions_list"])
+
+all_questions = []
+for idx, obj in enumerate(tqdm(all_questions_list, desc="Loading questions", total=len(all_questions_list))):
+    for idx, questions in enumerate(obj):
+        question = questions["question"]
+        all_questions.append(question)
  
 graph_func.insert(all_docs)
 
-print(graph_func.query("Where was Barbara Hammer educated after Mar 1962?", param=QueryParam(mode="dynamic")))
+for question in all_questions:
+    ans =graph_func.query(question, param=QueryParam(mode="dynamic"))
+    print(ans)
