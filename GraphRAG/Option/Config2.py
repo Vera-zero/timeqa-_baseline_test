@@ -13,7 +13,8 @@ from Core.Utils.YamlModel import YamlModel
 class WorkingParams(BaseModel):
     """Working parameters"""
 
-    working_dir: str = ""
+    working_dir: str = ""      # 中间文件工作目录
+    result_dir: str = ""       # 最终结果目录
     exp_name: str = ""
     data_root: str = ""
     dataset_name: str = ""
@@ -104,9 +105,16 @@ class Config(WorkingParams, YamlModel):
         if data_root is not None:
             final["data_root"] = data_root
 
-        # 构建新的统一路径结构
-        base_dir = "/workspace/ETE-Graph/QA-result"
-        final["working_dir"] = os.path.join(base_dir, dataset_name, method_name)
+        # 构建双路径结构
+        workdir_base = "/workspace/ETE-Graph/workdir"
+        result_base = "/workspace/ETE-Graph/QA-result"
+
+        final["working_dir"] = os.path.join(workdir_base, dataset_name, method_name)
+        final["result_dir"] = os.path.join(result_base, dataset_name, method_name)
+
+        # 确保目录存在
+        os.makedirs(final["working_dir"], exist_ok=True)
+        os.makedirs(final["result_dir"], exist_ok=True)
 
         return Config(**final)
     

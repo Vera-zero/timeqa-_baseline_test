@@ -26,8 +26,10 @@ import json
 from tqdm import tqdm
 from pathlib import Path
 
-WORK_DIR = Path("/workspace/ETE-Graph/QA-result/timeqa/DyG-RAG")
-WORK_DIR.mkdir(exist_ok=True)
+WORK_DIR = Path("/workspace/ETE-Graph/workdir/timeqa/DyG-RAG")
+RESULT_DIR = Path("/workspace/ETE-Graph/QA-result/timeqa/DyG-RAG")
+WORK_DIR.mkdir(parents=True, exist_ok=True)
+RESULT_DIR.mkdir(parents=True, exist_ok=True)
 CORPUS_FILE = Path("/workspace/ETE-Graph/dataset/timeqa/test_processed.json")
 
 from graphrag._utils import compute_args_hash, logger
@@ -272,7 +274,7 @@ for idx, question in enumerate(tqdm(all_questions, desc="Processing questions"))
     print(f"Answer: {ans}\n")
 
 # Save results to JSON
-output_file = WORK_DIR / "results.json"
+output_file = RESULT_DIR / "results.json"
 output_data = {
     "metadata": {
         "dataset": "timeqa",

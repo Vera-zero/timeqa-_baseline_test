@@ -6,6 +6,8 @@ models/
 
 # QA Results
 QA-result/
+workdir/
+
 
 # Python cache
 DyG-RAG/**/__pycache__/

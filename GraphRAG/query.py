@@ -12,28 +12,30 @@ from Core.Utils.Evaluation import Evaluator
 
 
 def check_dirs(opt):
-    # working_dir 已经是完整路径：/workspace/ETE-Graph/QA-result/{dataset_name}/{method_name}
-    # 直接在其下创建子目录即可
-    result_dir = os.path.join(opt.working_dir, "Results")
+    # working_dir 是中间文件目录：/workspace/ETE-Graph/workdir/{dataset_name}/{method_name}
+    # result_dir 是最终结果目录：/workspace/ETE-Graph/QA-result/{dataset_name}/{method_name}
     config_dir = os.path.join(opt.working_dir, "Configs")
     metric_dir = os.path.join(opt.working_dir, "Metrics")
-    os.makedirs(result_dir, exist_ok=True)
+
     os.makedirs(config_dir, exist_ok=True)
     os.makedirs(metric_dir, exist_ok=True)
+
+    # 确保 result_dir（QA-result 目录）存在，用于保存 results.json
+    os.makedirs(opt.result_dir, exist_ok=True)
 
     # 提取配置文件名
     method_config_name = Path(args.opt).name  # 如 "HippoRAG.yaml"
     base_config_path = Path(args.opt).parent.parent / "Config2.yaml"
 
-    # 复制配置文件到配置目录
+    # 复制配置文件到 working_dir/Configs
     copyfile(args.opt, os.path.join(config_dir, method_config_name))
     if base_config_path.exists():
         copyfile(base_config_path, os.path.join(config_dir, "Config2.yaml"))
 
-    return result_dir
+    return metric_dir  # 返回 Metrics 目录用于保存指标
 
 
-def wrapper_query(query_dataset, digimon, result_dir):
+def wrapper_query(query_dataset, digimon, result_dir, opt):
     all_res = []
 
     dataset_len = len(query_dataset)
@@ -46,19 +48,20 @@ def wrapper_query(query_dataset, digimon, result_dir):
         all_res.append(query)
 
     all_res_df = pd.DataFrame(all_res)
-    save_path = os.path.join(result_dir, "results.json")
+    save_path = os.path.join(opt.result_dir, "results.json")  # 使用 opt.result_dir
     all_res_df.to_json(save_path, orient="records", lines=True)
     return save_path
 
 
-def wrapper_query_filtered(filtered_questions, digimon, result_dir):
+def wrapper_query_filtered(filtered_questions, digimon, result_dir, opt):
     """
     查询已经筛选过的问题列表
 
     Args:
         filtered_questions: 已筛选的问题列表
         digimon: GraphRAG实例
-        result_dir: 结果保存目录
+        result_dir: 结果保存目录（这里用于metrics）
+        opt: 配置对象
     """
     all_res = []
 
@@ -75,7 +78,7 @@ def wrapper_query_filtered(filtered_questions, digimon, result_dir):
         print(f"  回答: {res[:100]}...")
 
     all_res_df = pd.DataFrame(all_res)
-    save_path = os.path.join(result_dir, "results.json")
+    save_path = os.path.join(opt.result_dir, "results.json")  # 使用 opt.result_dir
     all_res_df.to_json(save_path, orient="records", lines=True)
     print(f"\n结果已保存到: {save_path}")
     return save_path
@@ -132,7 +135,7 @@ if __name__ == "__main__":
     # asyncio.run(digimon.insert(corpus))
 
     # 查询属于这2个文档的问题
-    save_path = wrapper_query_filtered(filtered_questions, digimon, result_dir)
+    save_path = wrapper_query_filtered(filtered_questions, digimon, result_dir, opt)
 
     # # 评估结果
     # asyncio.run(wrapper_evaluation(save_path, opt, result_dir))
