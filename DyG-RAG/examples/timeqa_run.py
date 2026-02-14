@@ -236,13 +236,9 @@ graph_func = GraphRAG(
 embedding_func.model = model_ref
 
 corpus_data = read_json_file(CORPUS_FILE)
-datas_content = corpus_data["datas"]
-total_docs = len(datas_content)
-logger.info(f"Start processing, total {total_docs} documents to process.")
-
-corpus_data = read_json_file(CORPUS_FILE)
 datas_content = corpus_data["datas"][:2]
 total_docs = len(datas_content)
+logger.info(f"Start processing, total {total_docs} documents to process.")
 #print (f"datas:{datas_content[0]}, total_docs: {total_docs}")
 all_docs = []
 all_questions_list = []
@@ -253,10 +249,13 @@ for idx, obj in enumerate(tqdm(datas_content, desc="Loading docs", total=total_d
     all_questions_list.append(obj["questions_list"])
 
 all_questions = []
+all_targets = []
 for idx, obj in enumerate(tqdm(all_questions_list, desc="Loading questions", total=len(all_questions_list))):
     for idx, questions in enumerate(obj):
         question = questions["question"]
+        target = questions["targets"]
         all_questions.append(question)
+        all_targets.append(target)
  
 graph_func.insert(all_docs)
 
@@ -268,10 +267,12 @@ for idx, question in enumerate(tqdm(all_questions, desc="Processing questions"))
     ans = graph_func.query(question, param=QueryParam(mode="dynamic"))
     end_time = time.time()
     query_time = end_time - start_time
+    targets = all_targets[idx]
     results.append({
         "question_idx": idx,
         "question": question,
         "answer": ans,
+        "targets": targets,
         "query_time": query_time
     })
     print(f"\nQuestion {idx + 1}/{len(all_questions)}: {question}")

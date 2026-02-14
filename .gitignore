@@ -9,6 +9,9 @@ QA-result/
 workdir/
 evaluation_results/
 GraphRAG/default
+DyG-RAG/examples/tempreason_api.py
+DyG-RAG/examples/timeqa_api.py
+
 
 # Python cache
 DyG-RAG/**/__pycache__/
