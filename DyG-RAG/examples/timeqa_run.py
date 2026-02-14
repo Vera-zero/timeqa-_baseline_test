@@ -272,35 +272,89 @@ with open(output_time_file, 'w', encoding='utf-8') as f:
     json.dump(time_data, f, ensure_ascii=False, indent=2)
 
 
-# Collect results
-results = []
+# Collect results with checkpoint support
+output_file = RESULT_DIR / "results.json"
+
+# Load existing results if file exists
+existing_results = []
+processed_indices = set()
+
+if output_file.exists():
+    try:
+        with open(output_file, 'r', encoding='utf-8') as f:
+            existing_data = json.load(f)
+            existing_results = existing_data.get("results", [])
+            processed_indices = {r["question_idx"] for r in existing_results}
+        print(f"\n📂 发现已有结果文件，已完成 {len(processed_indices)} 个问题")
+    except Exception as e:
+        print(f"\n⚠️  读取已有结果文件失败: {e}，将重新开始")
+        existing_results = []
+        processed_indices = set()
+
+results = existing_results.copy()
+save_interval = 5  # 每5个问题保存一次
+questions_since_last_save = 0
+skip_mode = False  # 标记是否进入跳过模式
+
 print(f"\n开始处理 {len(all_questions)} 个问题...")
 for idx, question in enumerate(tqdm(all_questions, desc="Processing questions")):
+    # 检查是否已处理过此问题
+    if idx in processed_indices:
+        if not skip_mode:
+            print(f"\n✓ 问题 {idx} 已处理，跳过...")
+            skip_mode = True
+        continue
+
+    # 一旦发现未处理的问题，说明从此之后都未处理
+    if skip_mode:
+        print(f"\n→ 从问题 {idx} 开始继续处理...")
+        skip_mode = False
+
     start_time = time.time()
     ans = graph_func.query(question, param=QueryParam(mode="dynamic"))
     end_time = time.time()
     query_time = end_time - start_time
-    targets = all_targets[idx]
+
     results.append({
         "question_idx": idx,
         "question": question,
         "answer": ans,
-        "targets": targets,
+        "targets": all_targets[idx],
         "query_time": query_time
     })
-    print(f"\nQuestion {idx + 1}/{len(all_questions)}: {question}")
-    print(f"Answer: {ans}")
-    print(f"Query time: {query_time:.2f}s\n")
 
-# Save results to JSON
-output_file = RESULT_DIR / "results.json"
+    processed_indices.add(idx)
+    questions_since_last_save += 1
+
+    # 每5个问题保存一次
+    if questions_since_last_save >= save_interval:
+        output_data = {
+            "metadata": {
+                "dataset": "timeqa",
+                "total_questions": len(all_questions),
+                "total_docs": len(all_docs),
+                "processed_time": datetime.now().isoformat(),
+                "corpus_file": str(CORPUS_FILE),
+                "completed_questions": len(processed_indices)
+            },
+            "results": results
+        }
+
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(output_data, f, ensure_ascii=False, indent=2)
+
+        print(f"\n💾 已保存进度: {len(processed_indices)}/{len(all_questions)} 个问题")
+        questions_since_last_save = 0
+
+# Final save with all results
 output_data = {
     "metadata": {
         "dataset": "timeqa",
         "total_questions": len(all_questions),
         "total_docs": len(all_docs),
         "processed_time": datetime.now().isoformat(),
-        "corpus_file": str(CORPUS_FILE)
+        "corpus_file": str(CORPUS_FILE),
+        "completed_questions": len(processed_indices)
     },
     "results": results
 }
@@ -309,5 +363,5 @@ with open(output_file, 'w', encoding='utf-8') as f:
     json.dump(output_data, f, ensure_ascii=False, indent=2)
 
 print(f"\n✅ 结果已保存到: {output_file}")
-print(f"   - 处理问题数: {len(all_questions)}")
+print(f"   - 处理问题数: {len(processed_indices)}")
 print(f"   - 文档数: {len(all_docs)}")

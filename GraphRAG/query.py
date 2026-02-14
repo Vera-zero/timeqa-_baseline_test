@@ -4,8 +4,10 @@ import argparse
 import os
 import asyncio
 import time
+import json
 from pathlib import Path
 from shutil import copyfile
+from datetime import datetime
 from Data.QueryDataset import RAGQueryDataset
 import pandas as pd
 from Core.Utils.Evaluation import Evaluator
@@ -37,30 +39,87 @@ def check_dirs(opt):
 
 
 def wrapper_query(query_dataset, digimon, result_dir, opt):
-    all_res = []
+    """
+    基本查询函数（支持断点续传）
+    """
+    # Checkpoint support - 加载已有结果
+    save_path = os.path.join(opt.result_dir, "results.json")
+    existing_results = []
+    processed_indices = set()
+
+    if os.path.exists(save_path):
+        try:
+            # 读取已有的结果文件
+            with open(save_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    result = json.loads(line.strip())
+                    existing_results.append(result)
+                    # 使用问题索引作为唯一标识
+                    question_idx = result.get('question_idx')
+                    if question_idx is not None:
+                        processed_indices.add(question_idx)
+            print(f"\n📂 发现已有结果文件，已完成 {len(processed_indices)} 个问题")
+        except Exception as e:
+            print(f"\n⚠️  读取已有结果文件失败: {e}，将重新开始")
+            existing_results = []
+            processed_indices = set()
+
+    all_res = existing_results.copy()
 
     dataset_len = len(query_dataset)
     dataset_len = 10
 
+    save_interval = 5  # 每5个问题保存一次
+    questions_since_last_save = 0
+    skip_mode = False  # 标记是否进入跳过模式
+
+    print(f"\n开始处理 {dataset_len} 个问题...")
+
     for _, i in enumerate(range(dataset_len)):
+        # 检查是否已处理过此问题
+        if i in processed_indices:
+            if not skip_mode:
+                print(f"\n✓ 问题 {i} 已处理，跳过...")
+                skip_mode = True
+            continue
+
+        # 一旦发现未处理的问题，说明从此之后都未处理
+        if skip_mode:
+            print(f"\n→ 从问题 {i} 开始继续处理...")
+            skip_mode = False
+
         query = query_dataset[i]
         start_time = time.time()
         res = asyncio.run(digimon.query(query["question"]))
         end_time = time.time()
         query_time = end_time - start_time
+
+        # 添加问题索引用于断点续传
+        query["question_idx"] = i
         query["output"] = res
         query["query_time"] = query_time
         all_res.append(query)
+        processed_indices.add(i)
+        questions_since_last_save += 1
 
+        # 每5个问题保存一次
+        if questions_since_last_save >= save_interval:
+            all_res_df = pd.DataFrame(all_res)
+            all_res_df.to_json(save_path, orient="records", lines=True)
+            print(f"\n💾 已保存进度: {len(processed_indices)}/{dataset_len} 个问题")
+            questions_since_last_save = 0
+
+    # 最终保存所有结果
     all_res_df = pd.DataFrame(all_res)
-    save_path = os.path.join(opt.result_dir, "results.json")  # 使用 opt.result_dir
     all_res_df.to_json(save_path, orient="records", lines=True)
+    print(f"\n✅ 结果已保存到: {save_path}")
+    print(f"   - 处理问题数: {len(processed_indices)}/{dataset_len}")
     return save_path
 
 
 def wrapper_query_filtered(filtered_questions, digimon, result_dir, opt):
     """
-    查询已经筛选过的问题列表
+    查询已经筛选过的问题列表（支持断点续传）
 
     Args:
         filtered_questions: 已筛选的问题列表
@@ -68,11 +127,48 @@ def wrapper_query_filtered(filtered_questions, digimon, result_dir, opt):
         result_dir: 结果保存目录（这里用于metrics）
         opt: 配置对象
     """
-    all_res = []
+    # Checkpoint support - 加载已有结果
+    save_path = os.path.join(opt.result_dir, "results.json")
+    existing_results = []
+    processed_indices = set()
 
-    print(f"\n开始查询 {len(filtered_questions)} 个问题...")
+    if os.path.exists(save_path):
+        try:
+            # 读取已有的结果文件
+            with open(save_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    result = json.loads(line.strip())
+                    existing_results.append(result)
+                    # 使用问题索引作为唯一标识
+                    question_idx = result.get('question_idx')
+                    if question_idx is not None:
+                        processed_indices.add(question_idx)
+            print(f"\n📂 发现已有结果文件，已完成 {len(processed_indices)} 个问题")
+        except Exception as e:
+            print(f"\n⚠️  读取已有结果文件失败: {e}，将重新开始")
+            existing_results = []
+            processed_indices = set()
+
+    all_res = existing_results.copy()
+    save_interval = 5  # 每5个问题保存一次
+    questions_since_last_save = 0
+    skip_mode = False  # 标记是否进入跳过模式
+
+    print(f"\n开始处理 {len(filtered_questions)} 个问题...")
 
     for idx, query in enumerate(filtered_questions):
+        # 检查是否已处理过此问题
+        if idx in processed_indices:
+            if not skip_mode:
+                print(f"\n✓ 问题 {idx} 已处理，跳过...")
+                skip_mode = True
+            continue
+
+        # 一旦发现未处理的问题，说明从此之后都未处理
+        if skip_mode:
+            print(f"\n→ 从问题 {idx} 开始继续处理...")
+            skip_mode = False
+
         doc_id = query.get('doc_id', 'N/A')
         print(f"\n[{idx+1}/{len(filtered_questions)}] 文档{doc_id}: {query['question'][:60]}...")
 
@@ -80,17 +176,30 @@ def wrapper_query_filtered(filtered_questions, digimon, result_dir, opt):
         res = asyncio.run(digimon.query(query["question"]))
         end_time = time.time()
         query_time = end_time - start_time
+
+        # 添加问题索引用于断点续传
+        query["question_idx"] = idx
         query["output"] = res
         query["query_time"] = query_time
         all_res.append(query)
+        processed_indices.add(idx)
+        questions_since_last_save += 1
 
         print(f"  回答: {res[:100]}...")
         print(f"  查询耗时: {query_time:.2f}秒")
 
+        # 每5个问题保存一次
+        if questions_since_last_save >= save_interval:
+            all_res_df = pd.DataFrame(all_res)
+            all_res_df.to_json(save_path, orient="records", lines=True)
+            print(f"\n💾 已保存进度: {len(processed_indices)}/{len(filtered_questions)} 个问题")
+            questions_since_last_save = 0
+
+    # 最终保存所有结果
     all_res_df = pd.DataFrame(all_res)
-    save_path = os.path.join(opt.result_dir, "results.json")  # 使用 opt.result_dir
     all_res_df.to_json(save_path, orient="records", lines=True)
-    print(f"\n结果已保存到: {save_path}")
+    print(f"\n✅ 结果已保存到: {save_path}")
+    print(f"   - 处理问题数: {len(processed_indices)}/{len(filtered_questions)}")
     return save_path
 
 
