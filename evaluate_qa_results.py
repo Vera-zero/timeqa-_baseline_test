@@ -262,7 +262,12 @@ def evaluate_method(method_name: str, method_path: str, dataset_name: str,
         predicted_answer = extract_answer_by_method(method_name, result)
 
         # 获取 ground truth
-        if question in gt_mapping:
+        if method_name == "DyG-RAG":
+            # DyG-RAG: 从结果中的 targets 字段提取答案
+            gt_answers = result.get('targets', [])
+            # 从结果中的 level 字段提取等级
+            level = result.get('level', 'unknown')
+        elif question in gt_mapping:
             gt_data = gt_mapping[question]
             gt_answers = gt_data['targets']
             level = gt_data['level']

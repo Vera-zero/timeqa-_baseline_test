@@ -251,12 +251,15 @@ for idx, obj in enumerate(tqdm(datas_content, desc="Loading docs", total=total_d
 
 all_questions = []
 all_targets = []
+all_levels = []
 for idx, obj in enumerate(tqdm(all_questions_list, desc="Loading questions", total=len(all_questions_list))):
     for idx, questions in enumerate(obj):
         question = questions["question"]
         target = questions["text_answers"]['text']
+        levels = question["level"]
         all_questions.append(question)
         all_targets.append(target)
+        all_levels.append(levels)
 
 graph_func.insert(all_docs)
 
@@ -320,7 +323,8 @@ for idx, question in enumerate(tqdm(all_questions, desc="Processing questions"))
         "question": question,
         "answer": ans,
         "targets": all_targets[idx],
-        "query_time": query_time
+        "query_time": query_time,
+        "level": all_levels[idx]
     })
 
     processed_indices.add(idx)
