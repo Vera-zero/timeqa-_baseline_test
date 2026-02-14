@@ -1,7 +1,0 @@
-Method,Dataset,Level,EM (%),F1 (%),Questions
-DyG-RAG,timeqa,easy,62.50,75.28,8
-DyG-RAG,timeqa,hard,50.00,60.00,8
-DyG-RAG,timeqa,overall,56.25,67.64,16
-HippoRAG,timeqa,easy,37.50,55.22,8
-HippoRAG,timeqa,hard,25.00,36.44,8
-HippoRAG,timeqa,overall,31.25,45.83,16

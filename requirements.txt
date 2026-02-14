@@ -71,6 +71,7 @@ pyyaml
 rouge-score==0.1.2
 mauve-text==0.4.0
 tiktoken
+unidecode
 
 # 可视化
 matplotlib>=3.7.0

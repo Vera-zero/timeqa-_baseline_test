@@ -255,6 +255,7 @@ def evaluate_method(method_name: str, method_path: str, dataset_name: str,
 
     # 评估每个问题
     evaluation_results = []
+    query_times = []
 
     for result in results:
         # 提取问题和预测答案
@@ -288,12 +289,31 @@ def evaluate_method(method_name: str, method_path: str, dataset_name: str,
             'f1': metrics['f1']
         })
 
+        # 收集查询时间
+        if 'query_time' in result:
+            query_times.append(result['query_time'])
+
     print(f"  ✅ 评估了 {len(evaluation_results)} 个问题")
+
+    # 加载索引时间
+    index_time = None
+    index_time_file = os.path.join(method_path, 'index_time.json')
+    if os.path.exists(index_time_file):
+        try:
+            index_data = load_json(index_time_file)
+            index_time = index_data.get('index_time')
+        except Exception as e:
+            print(f"  ⚠️  无法加载索引时间: {e}")
+
+    # 计算平均查询时间
+    avg_query_time = sum(query_times) / len(query_times) if query_times else None
 
     return {
         'method': method_name,
         'dataset': dataset_name,
-        'results': evaluation_results
+        'results': evaluation_results,
+        'index_time': index_time,
+        'avg_query_time': avg_query_time
     }
 
 
@@ -434,6 +454,50 @@ def generate_csv_table(results: List[Dict], output_file: str):
     print(f"✅ CSV 表格已保存到: {output_file}")
 
 
+def generate_time_evaluation_table(evaluation_data: List[Dict], output_file: str):
+    """生成时间评估表格 (Markdown格式)"""
+    lines = []
+    lines.append("\n## 时间评估\n")
+
+    # 表头
+    lines.append("| Method | Dataset | Index Time (s) | Avg Query Time (s) |")
+    lines.append("|--------|---------|----------------|---------------------|")
+
+    # 收集时间数据
+    time_data = []
+    for eval_result in evaluation_data:
+        if not eval_result:
+            continue
+
+        method = eval_result['method']
+        dataset = eval_result['dataset']
+        index_time = eval_result.get('index_time')
+        avg_query_time = eval_result.get('avg_query_time')
+
+        time_data.append({
+            'method': method,
+            'dataset': dataset,
+            'index_time': index_time,
+            'avg_query_time': avg_query_time
+        })
+
+    # 按方法和数据集排序
+    for data in sorted(time_data, key=lambda x: (x['method'], x['dataset'])):
+        index_time_str = f"{data['index_time']:.2f}" if data['index_time'] is not None else "N/A"
+        avg_query_time_str = f"{data['avg_query_time']:.2f}" if data['avg_query_time'] is not None else "N/A"
+
+        lines.append(
+            f"| {data['method']} | {data['dataset']} | "
+            f"{index_time_str} | {avg_query_time_str} |"
+        )
+
+    # 写入文件（追加模式）
+    with open(output_file, 'a', encoding='utf-8') as f:
+        f.write('\n'.join(lines))
+
+    print(f"✅ 时间评估表格已添加到: {output_file}")
+
+
 # ============================================================================
 # 主函数
 # ============================================================================
@@ -507,6 +571,8 @@ def main():
     if args.output_format in ['markdown', 'both']:
         md_file = os.path.join(args.output_dir, 'results_table.md')
         generate_markdown_table(aggregated_results, md_file)
+        # 添加时间评估表格
+        generate_time_evaluation_table(evaluation_data, md_file)
 
     if args.output_format in ['csv', 'both']:
         csv_file = os.path.join(args.output_dir, 'results_table.csv')

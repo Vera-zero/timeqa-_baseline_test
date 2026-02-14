@@ -12,7 +12,6 @@ GraphRAG/default
 DyG-RAG/examples/tempreason_api.py
 DyG-RAG/examples/timeqa_api.py
 
-
 # Python cache
 DyG-RAG/**/__pycache__/
 DyG-RAG/graphrag/__pycache__/
