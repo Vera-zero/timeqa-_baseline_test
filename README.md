@@ -1,17 +1,3 @@
-# ETE-Graph: 事件中心的时序知识图谱增强检索生成框架
-
-[![Paper](https://img.shields.io/badge/Paper-arXiv-red)](https://www.arxiv.org/abs/2507.13396)
-
-本项目是一个完整的时序知识图谱增强检索生成(Temporal Graph RAG)评估框架,包含多种 Graph-RAG 基线方法的实现和评估工具。项目核心是 **DyG-RAG**(Dynamic Graph RAG),这是首个事件中心的动态图检索增强生成框架,专门用于捕获、组织和推理文本数据中的时序知识。
-
-## 🌟 核心特性
-
-- **DyG-RAG 框架**: 首个事件中心的动态图 RAG 系统,支持细粒度时序编码
-- **多种基线方法**: 集成 LGraphRAG、GGraphRAG、HippoRAG、LightRAG、RAPTOR 等主流方法
-- **统一评估体系**: 标准化的评估指标和工具,支持公平比较
-- **时序问答数据集**: 支持 TimeQA、TempReason、ComplexTR 等多个数据集
-- **本地模型部署**: 完整支持 Qwen3-32B (LLM) 和 Qwen3-Embedding-8B (Embedding)
-
 ## 📁 项目结构
 
 ```
