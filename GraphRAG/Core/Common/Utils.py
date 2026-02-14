@@ -31,6 +31,18 @@ def mdhash_id(content, prefix: str = ""):
     return prefix + md5(content.encode()).hexdigest()
 
 
+def compute_args_hash(*args) -> str:
+    """Generate cache key hash from arguments.
+
+    Args:
+        *args: Arguments to hash (model, messages, etc.)
+
+    Returns:
+        MD5 hash string
+    """
+    return md5(str(args).encode()).hexdigest()
+
+
 def clean_str(input: Any) -> str:
     """Clean an input string by removing HTML escapes, control characters, and other unwanted characters."""
     # If we get non-string input, just give it back

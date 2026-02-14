@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from abc import ABC, abstractmethod
-from typing import Optional, Union
+from typing import Optional, Union, Any
 
 from openai import AsyncOpenAI
 from pydantic import BaseModel
@@ -26,7 +26,7 @@ from Config.LLMConfig import LLMConfig
 from Core.Common.Constants import LLM_API_TIMEOUT, USE_CONFIG_TIMEOUT
 from Core.Common.Logger import logger
 from Core.Schema.Message import Message
-from Core.Common.Utils import log_and_reraise
+from Core.Common.Utils import log_and_reraise, compute_args_hash
 from Core.Common.CostManager import CostManager, Costs
 
 
@@ -42,6 +42,7 @@ class BaseLLM(ABC):
     cost_manager: Optional[CostManager] = None
     model: Optional[str] = None  # deprecated
     pricing_plan: Optional[str] = None
+    llm_response_cache: Optional[Any] = None  # LLM response cache storage
    
     @abstractmethod
     def __init__(self, config: LLMConfig):
@@ -193,10 +194,41 @@ class BaseLLM(ABC):
         self, messages: list[dict], stream: bool = False, timeout: int = USE_CONFIG_TIMEOUT, max_tokens = None, format = "text"
     ) -> str:
         """Asynchronous version of completion. Return str. Support stream-print"""
+
+        # Check cache if enabled
+        if self.llm_response_cache is not None and self.config.enable_llm_cache:
+            # Generate cache key from model and messages
+            model_for_cache = self.pricing_plan or self.model or self.config.model
+            args_hash = compute_args_hash(model_for_cache, messages, format)
+
+            # Try to get from cache
+            cached_result = await self.llm_response_cache.get_by_id(args_hash)
+            if cached_result is not None:
+                logger.info(f"LLM cache hit for hash: {args_hash[:16]}...")
+                return cached_result.get("return", cached_result)
+
+        # Cache miss or cache disabled, call actual LLM
         if stream:
-            return await self._achat_completion_stream(messages, timeout=self.get_timeout(timeout), max_tokens = max_tokens, format = format)
-        resp = await self._achat_completion(messages, timeout=self.get_timeout(timeout), max_tokens = max_tokens, format = format)
-        return self.get_choice_text(resp)
+            result = await self._achat_completion_stream(messages, timeout=self.get_timeout(timeout), max_tokens = max_tokens, format = format)
+        else:
+            resp = await self._achat_completion(messages, timeout=self.get_timeout(timeout), max_tokens = max_tokens, format = format)
+            result = self.get_choice_text(resp)
+
+        # Store result in cache if enabled
+        if self.llm_response_cache is not None and self.config.enable_llm_cache and not stream:
+            model_for_cache = self.pricing_plan or self.model or self.config.model
+            args_hash = compute_args_hash(model_for_cache, messages, format)
+            await self.llm_response_cache.upsert({
+                args_hash: {
+                    "return": result,
+                    "model": model_for_cache
+                }
+            })
+            # Persist to disk
+            await self.llm_response_cache.persist()
+            logger.info(f"LLM result cached for hash: {args_hash[:16]}...")
+
+        return result
 
     def get_choice_text(self, rsp: dict) -> str:
         """Required to provide the first text of choice"""

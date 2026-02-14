@@ -7,7 +7,8 @@ models/
 # QA Results
 QA-result/
 workdir/
-
+evaluation_results/
+GraphRAG/default
 
 # Python cache
 DyG-RAG/**/__pycache__/

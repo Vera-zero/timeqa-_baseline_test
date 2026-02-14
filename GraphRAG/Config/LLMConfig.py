@@ -87,6 +87,9 @@ class LLMConfig(YamlModel):
     # For Thinking Mode (like DeepSeek-R1, QwQ models)
     enable_thinking: bool = False  # Set to False to disable thinking mode
 
+    # For LLM Response Cache
+    enable_llm_cache: bool = True  # Enable LLM response caching to avoid redundant API calls
+
     @field_validator("api_key")
     @classmethod
     def check_llm_key(cls, v):

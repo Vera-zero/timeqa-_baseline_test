@@ -64,6 +64,7 @@ class Context(BaseModel):
     cost_manager: CostManager = CostManager()
 
     _llm: Optional[BaseLLM] = None
+    llm_response_cache: Optional[Any] = None  # LLM response cache storage
 
     def new_environ(self):
         """Return a new os.environ object"""
@@ -87,15 +88,21 @@ class Context(BaseModel):
         self._llm = create_llm_instance(self.config.llm)
         if self._llm.cost_manager is None:
             self._llm.cost_manager = self._select_costmanager(self.config.llm)
+        # Attach LLM response cache if available
+        if self.llm_response_cache is not None:
+            self._llm.llm_response_cache = self.llm_response_cache
         return self._llm
 
     def llm_with_cost_manager_from_llm_config(self, llm_config: LLMConfig) -> BaseLLM:
         """Return a LLM instance, fixme: support cache"""
         # if self._llm is None:
-   
+
         llm = create_llm_instance(llm_config)
         if llm.cost_manager is None:
             llm.cost_manager = self._select_costmanager(llm_config)
+        # Attach LLM response cache if available
+        if self.llm_response_cache is not None:
+            llm.llm_response_cache = self.llm_response_cache
         return llm
 
   

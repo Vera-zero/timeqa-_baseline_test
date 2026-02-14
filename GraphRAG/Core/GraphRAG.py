@@ -74,6 +74,7 @@ class GraphRAG(ContextMixin, BaseModel):
         cls.doc_chunk = DocChunk(data.config.chunk, cls.ENCODER, data.workspace.make_for("chunk_storage"), cls.time_manager)
         cls.retriever_context = RetrieverContext()
         data = cls._init_storage_namespace(data)
+        data = cls._register_llm_cache(data)  # Initialize LLM cache
         data = cls._register_vdbs(data)
         data = cls._register_community(data)
         data = cls._register_e2r_r2c_matrix(data)
@@ -95,7 +96,10 @@ class GraphRAG(ContextMixin, BaseModel):
             data.e2r_namespace = data.workspace.make_for("map_e2r")
             data.r2c_namespace = data.workspace.make_for("map_r2c")
 
-   
+        # Initialize LLM cache namespace
+        if data.config.llm.enable_llm_cache:
+            data.llm_cache_namespace = data.workspace.make_for("llm_cache")
+
         return data
 
     @classmethod
@@ -120,6 +124,34 @@ class GraphRAG(ContextMixin, BaseModel):
                                           enforce_sub_communities=data.config.graph.enforce_sub_communities, llm=data.llm,namespace = data.community_namespace
                                          )
 
+        return data
+
+    @classmethod
+    def _register_llm_cache(cls, data):
+        """Initialize LLM response cache if enabled."""
+        if data.config.llm.enable_llm_cache:
+            from Core.Storage.JsonKVStorage import JsonKVStorage
+            # Create LLM cache storage
+            llm_cache = JsonKVStorage(
+                namespace=data.llm_cache_namespace,
+                name="llm_response_cache"
+            )
+            # Try to load existing cache
+            try:
+                import asyncio
+                asyncio.get_event_loop().run_until_complete(llm_cache.load())
+            except:
+                pass
+            # Attach cache to Context so all LLMs get it
+            data.context.llm_response_cache = llm_cache
+            # Attach cache to existing LLM instance
+            data.llm.llm_response_cache = llm_cache
+            # Also attach to graph's LLM if it has one
+            if hasattr(cls.graph, 'llm') and cls.graph.llm is not None:
+                cls.graph.llm.llm_response_cache = llm_cache
+            logger.info("LLM response cache initialized")
+        else:
+            logger.info("LLM response cache disabled")
         return data
 
     @classmethod
