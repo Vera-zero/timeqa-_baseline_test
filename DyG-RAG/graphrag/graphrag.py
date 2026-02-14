@@ -904,26 +904,18 @@ class GraphRAG:
             # ---------- Step 1: Process and save new docs
             logger.info("[Step 1/3] Processing documents...")
 
-            # === 开始计时 ===
-            doc_timing = {}
-            doc_start = time.time()
-
             # 文档哈希计算
-            hash_start = time.time()
             new_docs = {}
             with tqdm(total=len(string_or_strings), desc="Computing doc hashes", unit="doc") as pbar:
                 for c in string_or_strings:
                     doc_id = compute_mdhash_id(c.strip(), prefix="doc-")
                     new_docs[doc_id] = {"content": c.strip()}
                     pbar.update(1)
-            doc_timing["doc_hash_computation"] = time.time() - hash_start
 
             # 去重检查
-            dedup_start = time.time()
             logger.info("Checking for duplicate documents...")
             _add_doc_keys = await self.full_docs.filter_keys(list(new_docs.keys()))
             new_docs = {k: v for k, v in new_docs.items() if k in _add_doc_keys}
-            doc_timing["doc_deduplication"] = time.time() - dedup_start
 
             if not len(new_docs):
                 logger.warning(f"All docs are already in the storage")
@@ -932,32 +924,17 @@ class GraphRAG:
             logger.info(f"[New Docs] inserting {len(new_docs)} docs")
 
             # Save docs immediately
-            write_start = time.time()
             logger.info("Saving documents to storage...")
             await self.full_docs.upsert(new_docs)
-            doc_timing["doc_storage_write"] = time.time() - write_start
-            doc_timing["total_time"] = time.time() - doc_start
 
             await self.full_docs.index_done_callback()
 
-            # 保存计时数据到 time_used.json
-            from ._utils import save_timing_to_file
-            save_timing_to_file(
-                working_dir=self.working_dir,
-                stage="document_processing",
-                phase_times=doc_timing
-            )
-            logger.info(f"✓ Saved {len(new_docs)} documents (took {doc_timing['total_time']:.3f}s)")
+            logger.info(f"✓ Saved {len(new_docs)} documents")
 
             # ---------- Step 2: Check for existing chunks or create new ones
             logger.info("[Step 2/3] Processing text chunks...")
 
-            # === 开始计时 ===
-            chunk_timing = {}
-            chunk_start = time.time()
-
             # Check if chunks already exist for these docs
-            chunk_check_start = time.time()
             logger.info("Checking for existing chunks...")
             all_chunk_keys = await self.text_chunks.all_keys()
             doc_ids = set(new_docs.keys())
@@ -974,31 +951,22 @@ class GraphRAG:
             if existing_chunks:
                 logger.info(f"Found {len(existing_chunks)} existing chunks, skipping chunking")
                 inserting_chunks = existing_chunks
-                chunk_timing["chunk_check"] = time.time() - chunk_check_start
-                chunk_timing["chunk_creation"] = 0
-                chunk_timing["chunk_deduplication"] = 0
             else:
-                chunk_timing["chunk_check"] = time.time() - chunk_check_start
-
                 # 分块创建
-                chunk_create_start = time.time()
                 inserting_chunks = get_chunks(
                     new_docs=new_docs,
                     chunk_func=self.chunk_func,
                     overlap_token_size=self.chunk_overlap_token_size,
                     max_token_size=self.chunk_token_size,
                 )
-                chunk_timing["chunk_creation"] = time.time() - chunk_create_start
 
                 # 去重检查
-                chunk_dedup_start = time.time()
                 _add_chunk_keys = await self.text_chunks.filter_keys(
                     list(inserting_chunks.keys())
                 )
                 inserting_chunks = {
                     k: v for k, v in inserting_chunks.items() if k in _add_chunk_keys
                 }
-                chunk_timing["chunk_deduplication"] = time.time() - chunk_dedup_start
 
                 if not len(inserting_chunks):
                     logger.warning(f"All chunks are already in the storage")
@@ -1007,21 +975,11 @@ class GraphRAG:
                 logger.info(f"[New Chunks] inserting {len(inserting_chunks)} chunks")
 
                 # Save chunks immediately
-                chunk_write_start = time.time()
                 await self.text_chunks.upsert(inserting_chunks)
-                chunk_timing["chunk_storage_write"] = time.time() - chunk_write_start
-                chunk_timing["total_time"] = time.time() - chunk_start
 
                 await self.text_chunks.index_done_callback()
 
-                # 保存计时数据到 time_used.json
-                from ._utils import save_timing_to_file
-                save_timing_to_file(
-                    working_dir=self.working_dir,
-                    stage="chunking",
-                    phase_times=chunk_timing
-                )
-                logger.info(f"✓ Saved {len(inserting_chunks)} chunks (took {chunk_timing['total_time']:.3f}s)")
+                logger.info(f"✓ Saved {len(inserting_chunks)} chunks")
 
             # ---------- Step 3: Check for existing events or extract new ones
             logger.info("[Step 3/3] Processing event extraction...")

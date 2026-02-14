@@ -111,6 +111,8 @@ python main.py -opt Option/Method/HippoRAG.yaml \
                -dataset_name timeqa \
                -data_root /workspace/ETE-Graph/dataset
 
+python all.py -opt Option/Method/HippoRAG.yaml -dataset_name timeqa -file_pattern test_processed.json
+
 # 运行 LightRAG 方法
 python main.py -opt Option/Method/LightRAG.yaml \
                -dataset_name tempreason \

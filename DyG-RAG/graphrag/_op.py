@@ -430,8 +430,6 @@ async def extract_events(
     using_amazon_bedrock: bool=False,
 ) -> Union[tuple[BaseGraphStorage, dict], tuple[None, dict]]:
 
-    extraction_start_time = time.time()
-    
     # Convert legacy config to modern config objects
     config = ExtractionConfig(
         model_path=global_config.get("model_path", "/workspace/models"),
@@ -444,15 +442,7 @@ async def extract_events(
         event_relationship_batch_size=global_config.get("event_relationship_batch_size", 100),
         event_relationship_max_workers=global_config.get("event_relationship_max_workers", None)
     )
-    
-    phase_times = {
-        "event_extraction": 0,
-        "ner_extraction": 0,
-        "event_merging": 0,
-        "relationship_computation": 0,
-        "events_vdb_update": 0,
-    }
-    
+
     # Debug file setup if requested
     if config.if_wri_ents:
         try:
@@ -631,7 +621,6 @@ async def extract_events(
             logger.error(f"Failed to extract events from chunk {chunk_key_dp[0]}: {e}")
             return {}
 
-    event_extraction_start = time.time()
     logger.info(f"Starting event extraction for {len(ordered_chunks)} chunks...")
     try:
         # Create tasks with progress bar
@@ -662,10 +651,7 @@ async def extract_events(
     except Exception as e:
         logger.error(f"Error during event extraction phase: {e}")
         return None, {"failed": True, "phase": "event_extraction"}
-    
-    phase_times["event_extraction"] = time.time() - event_extraction_start
-    
-    ner_extraction_start = time.time()
+
     logger.info("=== NER ENTITY EXTRACTION PHASE ===")
     try:
         all_maybe_events = ner_extractor.extract_entities_from_events(all_maybe_events)
@@ -683,10 +669,7 @@ async def extract_events(
     except Exception as e:
         logger.error(f"Error during NER extraction: {e}")
         return None, {"failed": True, "phase": "ner_extraction"}
-    
-    phase_times["ner_extraction"] = time.time() - ner_extraction_start
 
-    event_merging_start = time.time()
     logger.info("=== EVENT MERGING PHASE ===")
     maybe_events = all_maybe_events
     all_events_data = []
@@ -694,10 +677,8 @@ async def extract_events(
         event_data = await _merge_events_then_upsert(k, v, dyg_inst, global_config)
         all_events_data.append(event_data)
 
-    phase_times["event_merging"] = time.time() - event_merging_start
     logger.info(f"Event merging complete: {len(all_events_data)} events merged and stored")
-    
-    relationship_computation_start = time.time()
+
     if len(maybe_events) > 1:
         # logger.info(f"Starting multiprocess event relationship processing for {len(maybe_events)} events")
         
@@ -714,14 +695,11 @@ async def extract_events(
             logger.warning("Falling back to single-threaded processing if needed")
     else:
         logger.info("Not enough events for multiprocess relationship processing")
-    
-    phase_times["relationship_computation"] = time.time() - relationship_computation_start
-    
+
     if not len(all_events_data):
         logger.warning("No events found, maybe your LLM is not working")
         return None, {}
 
-    events_vdb_update_start = time.time()
     logger.info("=== VECTOR DATABASE UPDATE PHASE ===")
     if events_vdb is not None and len(all_events_data) > 0:
         events_for_vdb = {}
@@ -757,11 +735,9 @@ async def extract_events(
                 logger.error(f"Error during events_vdb.upsert: {e}", exc_info=True)
             logger.warning("Failed to update events vector database, but continuing")
 
-    phase_times["events_vdb_update"] = time.time() - events_vdb_update_start
-    
     total_chunks = already_processed
     success_rate = 100.0 if failed_chunks == 0 else ((already_processed - failed_chunks) / already_processed * 100)
-    
+
     logger.info(f"Processing completion statistics:")
     logger.info(f"Total processed chunks: {already_processed}")
     logger.info(f"Failed chunks: {failed_chunks}")
@@ -769,29 +745,17 @@ async def extract_events(
     logger.info(f"Extracted events: {already_events} (before deduplication)")
     logger.info(f"NER extracted entities: {len(all_entities)}")
     logger.info(f"Final unique events: {len(maybe_events)}")
-    
-    total_extraction_time = time.time() - extraction_start_time
-    
+
     stats = {
         "total_chunks": already_processed,
-        "failed_chunks": failed_chunks, 
+        "failed_chunks": failed_chunks,
         "success_rate": success_rate,
         "raw_events": already_events,
         "ner_extracted_entities": len(all_entities),
         "unique_events": len(maybe_events),
-        "extraction_mode": "event_first_ner",
-        "phase_times": phase_times,
-        "total_extraction_time": total_extraction_time
+        "extraction_mode": "event_first_ner"
     }
-    
-    logger.info("=== DyG Construction Phase Time Statistics ===")
-    logger.info(f"Event Extraction (LLM): {phase_times['event_extraction']:.2f}s")
-    logger.info(f"NER Entity Extraction: {phase_times['ner_extraction']:.2f}s")
-    logger.info(f"Event Node Merging: {phase_times['event_merging']:.2f}s")
-    logger.info(f"Relationship Computation: {phase_times['relationship_computation']:.2f}s")
-    logger.info(f"Vector Database Update: {phase_times['events_vdb_update']:.2f}s")
-    logger.info(f"Total Time: {total_extraction_time:.2f}s")
-    
+
     if config.if_wri_ents:
         try:
             import datetime
@@ -813,16 +777,6 @@ async def extract_events(
             logger.info(f"Debug information written to debug.txt for {len(all_events_data)} events")
         except Exception as e:
             logger.error(f"Failed to write debug information: {e}")
-
-    # 保存计时数据到 time_used.json
-    from ._utils import save_timing_to_file
-    working_dir = global_config.get("working_dir", "./dyg_rag_cache")
-    save_timing_to_file(
-        working_dir=working_dir,
-        stage="event_extraction",
-        phase_times=phase_times,
-        total_time=total_extraction_time
-    )
 
     return dyg_inst, stats
 

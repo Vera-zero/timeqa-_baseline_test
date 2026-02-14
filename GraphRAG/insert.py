@@ -4,6 +4,7 @@ import argparse
 import os
 import asyncio
 import time
+import json
 from pathlib import Path
 from shutil import copyfile
 from Data.QueryDataset import RAGQueryDataset
@@ -103,10 +104,10 @@ async def wrapper_evaluation(path, opt, result_dir):
 
 
 if __name__ == "__main__":
-
+    
+    index_start_time = time.time()
     # with open("./book.txt") as f:
     #     doc = f.read()
-
     parser = argparse.ArgumentParser()
     parser.add_argument("-opt", type=str, help="Path to option YMAL file.")
     parser.add_argument("-dataset_name", type=str, help="Name of the dataset.")
@@ -141,8 +142,24 @@ if __name__ == "__main__":
     ]
     print(f"\n这些文档对应 {len(filtered_questions)} 个问题")
 
-    # 插入前2个文档
+    # 插入前2个文档并测量索引时间
     asyncio.run(digimon.insert(corpus))
+    index_end_time = time.time()
+    index_time = index_end_time - index_start_time
+
+    # 保存索引时间到 result_dir（与 results.json 同一目录）
+    output_time_file = os.path.join(opt.result_dir, "index_time.json")
+    time_data = {
+        "index_time": index_time
+    }
+
+    with open(output_time_file, 'w', encoding='utf-8') as f:
+        json.dump(time_data, f, ensure_ascii=False, indent=2)
+
+    print(f"\n索引构建完成，耗时: {index_time:.2f}秒")
+    print(f"索引时间已保存到: {output_time_file}")
+
+
 
     # # 查询属于这2个文档的问题
     # save_path = wrapper_query_filtered(filtered_questions, digimon, result_dir, opt)

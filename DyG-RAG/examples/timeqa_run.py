@@ -35,6 +35,7 @@ CORPUS_FILE = Path("/workspace/ETE-Graph/dataset/timeqa/test_processed.json")
 from graphrag._utils import compute_args_hash, logger
 
 import tiktoken
+graph_start_time = time.time()
 tiktoken.get_encoding("cl100k_base")
 
 logging.basicConfig(level=logging.INFO)
@@ -258,6 +259,18 @@ for idx, obj in enumerate(tqdm(all_questions_list, desc="Loading questions", tot
         all_targets.append(target)
  
 graph_func.insert(all_docs)
+
+graph_end_time = time.time()
+graph_time = graph_end_time - graph_start_time
+
+output_time_file = RESULT_DIR / "index_time.json"
+time_data = {
+    "index_time": graph_time
+}
+
+with open(output_time_file, 'w', encoding='utf-8') as f:
+    json.dump(time_data, f, ensure_ascii=False, indent=2)
+
 
 # Collect results
 results = []
