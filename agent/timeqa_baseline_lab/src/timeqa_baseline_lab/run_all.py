@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+﻿﻿from __future__ import annotations
 
 import argparse
 import copy
@@ -9,7 +9,7 @@ from timeqa_baseline_lab.config import load_config, load_yaml_dict, merge_config
 from timeqa_baseline_lab.runner import run_experiment
 
 
-STRATEGIES = ["zero_shot", "zero_shot_cot", "rag_cot", "react", "qaap"]
+STRATEGIES = ["zero_shot_cot", "rag_cot", "react"]
 
 
 def _apply_strategy_config(cfg, base_config_path: str):

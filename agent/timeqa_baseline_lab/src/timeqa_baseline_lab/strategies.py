@@ -5,7 +5,7 @@ from typing import List
 
 from .chunking import Chunk
 from .llm import BaseGenerator
-from .migrated import run_qaap, run_react
+from .migrated import run_react
 from .retriever import ContrieverRetriever
 
 
@@ -26,10 +26,6 @@ def _format_context(chunks: List[Chunk]) -> str:
     return "\n\n".join(parts)
 
 
-def build_zero_shot_prompt(question: str) -> str:
-    return f"Question: {question}\nAnswer briefly with the entity/event name only when possible."
-
-
 def build_zero_shot_cot_prompt(question: str) -> str:
     return (
         f"Question: {question}\n"
@@ -45,12 +41,6 @@ def build_rag_cot_prompt(question: str, chunks: List[Chunk]) -> str:
         f"Context:\n{_format_context(chunks)}\n\n"
         "Think step by step, then output only:\nFinal Answer: <answer>"
     )
-
-
-def zero_shot(llm: BaseGenerator, question: str) -> StrategyOutput:
-    prompt = build_zero_shot_prompt(question)
-    ans = llm.generate(prompt, system_prompt=SYSTEM_PROMPT)
-    return StrategyOutput(answer=ans, retrieved=[], trace=[])
 
 
 def zero_shot_cot(llm: BaseGenerator, question: str) -> StrategyOutput:
@@ -73,30 +63,5 @@ def react(llm: BaseGenerator, retriever: ContrieverRetriever, question: str, top
         question=question,
         top_k=top_k,
         max_steps=max_steps,
-    )
-    return StrategyOutput(answer=answer, retrieved=retrieved, trace=trace)
-
-
-def qaap(
-    llm: BaseGenerator,
-    retriever: ContrieverRetriever,
-    question: str,
-    top_k: int,
-    max_slice_length: int = 512,
-    slice_stride: int = 384,
-    max_extract_rounds: int = 6,
-    max_entities: int = 5,
-    max_slices_per_chunk: int = 2,
-) -> StrategyOutput:
-    answer, retrieved, trace = run_qaap(
-        llm=llm,
-        retriever=retriever,
-        question=question,
-        top_k=top_k,
-        max_slice_length=max_slice_length,
-        slice_stride=slice_stride,
-        max_extract_rounds=max_extract_rounds,
-        max_entities=max_entities,
-        max_slices_per_chunk=max_slices_per_chunk,
     )
     return StrategyOutput(answer=answer, retrieved=retrieved, trace=trace)

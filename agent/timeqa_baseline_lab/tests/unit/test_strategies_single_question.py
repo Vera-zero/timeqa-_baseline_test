@@ -79,7 +79,7 @@ _install_lightweight_stubs()
 from timeqa_baseline_lab.chunking import Chunk
 from timeqa_baseline_lab.config import load_config
 from timeqa_baseline_lab.data import load_corpus, load_questions_from_arrow
-from timeqa_baseline_lab.strategies import qaap, rag_cot, react, zero_shot, zero_shot_cot
+from timeqa_baseline_lab.strategies import rag_cot, react, zero_shot_cot
 
 
 class InMemoryFullCorpusRetriever:
@@ -196,11 +196,6 @@ class TestSingleQuestionStrategies(unittest.TestCase):
         self.assertEqual(len(self.retriever.chunks), len(self.docs))
         self.assertGreater(len(self.retriever.chunks), 700)
 
-    def test_zero_shot_single_question(self):
-        out = zero_shot(self._make_llm(), self.question_item.question)
-        self.assertTrue(out.answer)
-        self.assertEqual(len(out.retrieved), 0)
-
     def test_zero_shot_cot_single_question(self):
         out = zero_shot_cot(self._make_llm(), self.question_item.question)
         self.assertTrue(out.answer)
@@ -218,15 +213,6 @@ class TestSingleQuestionStrategies(unittest.TestCase):
         self.assertGreaterEqual(len(out.retrieved), 1)
         self.assertGreaterEqual(len(out.trace), 1)
 
-    def test_qaap_single_question_with_full_corpus_retrieval(self):
-        out = qaap(self._make_llm(), self.retriever, self.question_item.question, self.top_k)
-        self.assertTrue(out.answer)
-        self.assertGreaterEqual(len(out.retrieved), 1)
-        self.assertGreaterEqual(len(out.trace), 1)
-
-        self.assertTrue(out.answer)
-        self.assertGreaterEqual(len(out.retrieved), 1)
-        self.assertGreaterEqual(len(out.trace), 1)
 
 
 if __name__ == "__main__":

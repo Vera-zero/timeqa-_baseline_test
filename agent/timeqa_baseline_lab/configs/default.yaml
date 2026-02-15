@@ -1,4 +1,4 @@
-﻿# Core paths
+﻿﻿# Core paths
 data:
   corpus_path: "C:/Users/19924/Desktop/agent/timeqa_agent/timeqa_agent/data/timeqa/corpus/test.json"
   question_arrow_path: "C:/Users/19924/Desktop/agent/timeqa_agent/timeqa_agent/data/timeqa/raw/test/data-00000-of-00001.arrow"
@@ -41,7 +41,7 @@ chunk:
 
 # Runtime config
 run:
-  strategy: "zero_shot"      # zero_shot / zero_shot_cot / rag_cot / react / qaap
+  strategy: "zero_shot_cot"      # zero_shot / zero_shot_cot / rag_cot / react / qaap
   max_questions: 100           # set <=0 for full set
   resume: true
   save_every: 1

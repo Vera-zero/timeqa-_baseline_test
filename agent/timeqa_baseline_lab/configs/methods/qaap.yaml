@@ -1,7 +1,0 @@
-﻿run:
-  strategy_params:
-    max_slice_length: 512
-    slice_stride: 384
-    max_extract_rounds: 6
-    max_entities: 5
-    max_slices_per_chunk: 2
