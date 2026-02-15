@@ -7,6 +7,7 @@ from typing import List, Optional
 import requests
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
+from openai import OpenAI
 
 from .config import ModelConfig
 
@@ -183,6 +184,62 @@ class APIGenerator(BaseGenerator):
         raise RuntimeError(f"API generation failed after {self.max_retries} retries: {last_err}")
 
 
+class VLLMGenerator(BaseGenerator):
+    """Generator for local VLLM service (e.g., Qwen3-32B)"""
+
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8000/v1",
+        model_name: str = "qwen3-32b",
+        max_new_tokens: int = 256,
+        temperature: float = 0.0,
+        max_retries: int = 3,
+        timeout: int = 180,
+    ):
+        self.base_url = base_url
+        self.model_name = model_name
+        self.max_new_tokens = max_new_tokens
+        self.temperature = temperature
+        self.max_retries = max(1, int(max_retries))
+        self.timeout = max(1, int(timeout))
+
+        # Create OpenAI client for local VLLM service
+        self.client = OpenAI(
+            base_url=base_url,
+            api_key="EMPTY"  # Local VLLM doesn't require API key
+        )
+
+    def _build_messages(self, prompt: str, system_prompt: Optional[str]) -> List[dict]:
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        return messages
+
+    def generate(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        messages = self._build_messages(prompt, system_prompt)
+        last_err = None
+
+        for i in range(self.max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    temperature=self.temperature,
+                    max_tokens=self.max_new_tokens,
+                    timeout=self.timeout,
+                    extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                )
+                return response.choices[0].message.content.strip()
+            except Exception as e:
+                last_err = e
+                if i < self.max_retries - 1:
+                    time.sleep(1.5 * (i + 1))
+                continue
+
+        raise RuntimeError(f"VLLM generation failed after {self.max_retries} retries: {last_err}")
+
+
 def build_generator(cfg: ModelConfig) -> BaseGenerator:
     provider = (cfg.provider or "local").lower()
     if provider in {"hf", "local"}:
@@ -203,4 +260,13 @@ def build_generator(cfg: ModelConfig) -> BaseGenerator:
             max_retries=cfg.max_retries,
             timeout=cfg.timeout,
         )
-    raise ValueError(f"Unsupported model.provider: {cfg.provider}. Use local/hf or remote/api")
+    if provider == "vllm":
+        return VLLMGenerator(
+            base_url=cfg.base_url,
+            model_name=cfg.model_name,
+            max_new_tokens=cfg.max_new_tokens,
+            temperature=cfg.temperature,
+            max_retries=cfg.max_retries,
+            timeout=cfg.timeout,
+        )
+    raise ValueError(f"Unsupported model.provider: {cfg.provider}. Use local/hf, remote/api, or vllm")

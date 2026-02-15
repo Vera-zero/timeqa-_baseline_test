@@ -15,10 +15,10 @@ class DataConfig:
 
 @dataclass
 class ModelConfig:
-    provider: str = "hf"  # hf / api
-    model_name: str = "Qwen/Qwen3-4B-Instruct-2507"
+    provider: str = "vllm"  # hf / api / vllm
+    model_name: str = "qwen3-32b"
     model: str = "deepseek-chat"
-    base_url: str = ""
+    base_url: str = "http://localhost:8000/v1"
     api_key_env: str = "DEEPSEEK_API_KEY"
     device: str = "auto"
     torch_dtype: str = "auto"
@@ -103,8 +103,14 @@ def _build_experiment(cfg: Dict[str, Any]) -> ExperimentConfig:
             raise ValueError("model.model is required when model.provider=remote")
         if not exp.model.base_url:
             raise ValueError("model.base_url is required when model.provider=remote")
+    elif provider == "vllm":
+        exp.model.provider = "vllm"
+        if not exp.model.model_name:
+            raise ValueError("model.model_name is required when model.provider=vllm")
+        if not exp.model.base_url:
+            raise ValueError("model.base_url is required when model.provider=vllm")
     else:
-        raise ValueError(f"Invalid model.provider={exp.model.provider}. Use local/hf or remote/api")
+        raise ValueError(f"Invalid model.provider={exp.model.provider}. Use local/hf, remote/api, or vllm")
 
     exp.model.batch_size = max(1, int(exp.model.batch_size))
     exp.model.max_retries = max(1, int(exp.model.max_retries))

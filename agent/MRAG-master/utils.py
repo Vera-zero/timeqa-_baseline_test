@@ -121,6 +121,8 @@ def llm_names(l, instruct=False):
         l="Warrieryes/timo-13b-hf"
     elif l=="timellama":
         l="chrisyuan45/TimeLlama-7b-chat"
+    elif l=="qwen3_32b":
+        l="/workspace/models/Qwen3-32B"
     return l
 
 def load_contriever_output(path):
@@ -480,6 +482,60 @@ def fetch_completion(client, prompt, timeout=10):
 
 
 def call_pipeline(args, prompts, max_tokens=100, return_list=False, ver=False):
+
+    # Handle Qwen3-32B via local VLLM service with OpenAI API
+    if args.reader and 'qwen3_32b' in args.reader.lower():
+        from openai import OpenAI
+
+        # Create OpenAI client for local VLLM service
+        vllm_client = OpenAI(
+            base_url="http://localhost:8000/v1",
+            api_key="EMPTY"
+        )
+
+        responses = []
+        for prompt in tqdm(prompts, desc="Qwen3-32B"):
+            for attempt in range(3):
+                try:
+                    completion = vllm_client.chat.completions.create(
+                        model="qwen3-32b",
+                        messages=[
+                            {"role": "system", "content": "You are a helpful assistant that answers questions concisely."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        temperature=0.2,
+                        max_tokens=max_tokens,
+                        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+                    )
+                    response = completion.choices[0].message.content.strip()
+                    break
+                except Exception as e:
+                    if attempt == 2:
+                        response = f"Error after 3 retries: {str(e)}"
+                    else:
+                        time.sleep(1)
+
+            responses.append(response)
+
+        # Post-process responses
+        for stopper in ['</Keywords>', '</Summarization>', '</Answer>', '</Info>', '</Sentences>', '</Sentence>', '</Response>']:
+            responses = [res.split(stopper)[0] if stopper in res else res for res in responses]
+
+        if return_list and '<Thought>' in prompts[0]:
+            output = []
+            for res in responses:
+                res = res.split('\n</Answer>')[0]
+                res = res.split('<Answer>\n')[-1]
+                res = res.split('- ')
+                res = [r.replace('\n','').strip() for r in res]
+                res = [r for r in res if len(r)>0]
+                output.append(res)
+            return output
+        elif '<Thought>' in prompts[0]:
+            for mid_stopper in ['</Thought>', '<Answer>', '<Response>']:
+                responses = [res.split(mid_stopper)[-1].replace('\n','').strip() if mid_stopper in res else res for res in responses]
+
+        return responses
 
     if args.reader and 'gpt' in args.reader.lower():
 

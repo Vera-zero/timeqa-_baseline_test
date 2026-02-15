@@ -284,7 +284,7 @@ def main():
         choices=['bm25', 'contriever','hybrid'], 
         default='contriever', #
     )
-    parser.add_argument('--reader', type=str, default='gpt', choices=['llama', 'timo', 'timellama','llama_70b','llama_8b', 'gpt'])
+    parser.add_argument('--reader', type=str, default='qwen3_32b', choices=['llama', 'timo', 'timellama','llama_70b','llama_8b', 'gpt', 'qwen3_32b'])
     parser.add_argument('--paradigm', type=str, default='concat', choices=['fusion', 'concat'])
 
     args = parser.parse_args()
@@ -308,7 +308,7 @@ def main():
     args.l = llm_names(args.reader, instruct=True)
     flg = '70b' in args.llm_name
 
-    if 'gpt' in args.l.lower():
+    if 'gpt' in args.l.lower() or 'qwen3_32b' in args.l.lower():
         pass
     else:
         if flg:
