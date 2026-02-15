@@ -15,3 +15,8 @@ DyG-RAG/examples/timeqa_api.py
 # Python cache
 DyG-RAG/**/__pycache__/
 DyG-RAG/graphrag/__pycache__/
+
+#agent
+agent/timeqa_baseline_lab/cache
+agent/timeqa_baseline_lab/outputs
+agent/**/__pycache__/
